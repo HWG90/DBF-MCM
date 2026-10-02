@@ -206,6 +206,15 @@ test('popup primitives render above underlying text and choice arrows remain usa
  local m=module.new(api);m.visible=true;m.compose(1920,1080);m.tick({down=function(k)return k==1 end,mouse=function()return 1080,753 end})
  assert(api.get('arrows','v')==2 and not m.dropdown)
 end)
+test('text entry commits when clicking away without Enter',function()
+ local core=assert(loadfile('src/core.lua'))();local module=assert(loadfile('src/menu.lua'))();local api=core.new(nil,function()end)
+ api.register({id='entry',name='Entry',pages={{id='p',name='Page',controls={{id='name',type='input',label='Name',default='Old'}}}}})
+ local m=module.new(api);m.visible=true;m.compose(1920,1080)
+ m.text_edit={mod=api.list()[1],control=api.list()[1].pages[1].controls[1],text='Goose',replace=false}
+ m.tick({down=function(k)return k==1 end,mouse=function()return 1900,1000 end})
+ assert(api.get('entry','name')=='Goose' and not m.text_edit)
+end)
+
 test('numeric value entry commits snapped values rejects range errors and cancels',function()
  local core=assert(loadfile('src/core.lua'))();local module=assert(loadfile('src/menu.lua'))();local api=core.new(nil,function()end)
  api.register({id='entry',name='Entry',pages={{id='p',name='Page',controls={{id='v',type='slider',label='Value',min=-10,max=10,step=.5,default=0}}}}})

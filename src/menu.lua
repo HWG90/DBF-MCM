@@ -194,6 +194,10 @@ function M.new(api)
         if self.visible and input.mouse then
             local x,y=input.mouse();if x and y and input.down(1) and not self.mouse_held then
                 local valid=self.finish_color_field()
+                if self.text_edit and self.text_edit.control and self.text_edit.control.type=='input' then
+                    self.key(13)
+                    valid=self.text_edit==nil
+                end
                 if valid then self.text_edit=nil end
                 for i=#hits,1,-1 do local h=hits[i];if x>=h.x and x<=h.x+h.w and y>=h.y and y<=h.y+h.h then if valid then h.click(x,y)end;break end end
             end
@@ -377,7 +381,7 @@ function M.new(api)
                             end)
                         else
                             rect(x+350,y-5,175,29,{65,73,80})
-                            local label=c.type=='button' and (c.id=='apply' and 'APPLY' or 'RUN') or (value==0 and 'BIND KEY' or 'VK '..tostring(value))
+                            local label=c.type=='button' and (c.id=='apply' and 'APPLY' or (page.id=='presets' and 'OK' or 'RUN')) or (value==0 and 'BIND KEY' or 'VK '..tostring(value))
                             text(x+362,y,label,18,color)
                         end
                     end
