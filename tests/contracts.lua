@@ -354,4 +354,17 @@ test('text input preserves strings validates and commits on blur',function()
  m.text_edit={mod=api.mods.input_test,control=api.mods.input_test.controls.name,text='cancel',replace=false}
  m.key(27);assert(h.get('name')=='Ab_' and not m.text_edit)
 end)
+test('popup text owns a separate GUI and unchanged frames avoid native churn',function()
+ local world={};local created,draws,destroyed=0,0,0
+ local sr={Application={worlds=function()return {world}end,main_world=function()return world end},
+ World={create_screen_gui=function()created=created+1;return {number=created}end,destroy_gui=function()destroyed=destroyed+1 end},
+ Vector2=function(...)return {...}end,Vector3=function(...)return {...}end,Color=function(...)return {...}end,
+ Gui={rect=function(g)draws=draws+1;return draws end,text=function(g)draws=draws+1;return draws end,destroy_rect=function()end,destroy_text=function()end}}
+ local commands={{type='text',text='Main',x=0,y=0,size=18,a=1,c={255,255,255}},
+ {type='text',text='Popup',x=0,y=0,size=18,a=1,c={255,255,255},layer=200}}
+ local v=assert(loadfile('src/view.lua'))().new(sr)
+ v.draw(commands);assert(created==2 and draws==2);v.draw(commands);assert(draws==2)
+ commands[2].text='Changed';v.draw(commands);assert(draws==4 and created==2)
+ v.release();assert(destroyed==2)
+end)
 print(count..' meaningful contract tests passed; native rendering/input remain unverified')
