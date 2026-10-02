@@ -2,7 +2,7 @@
 
 # Mod Configuration Menu — development preview
 
-**Required: MDL API 2 and Bingus Shared Loader. MCM does not currently support standalone installation without MDL.**
+**Required: MDL API 2 and Bingus Shared Loader. MCM does not currently support standalone installation without MDL. Bingus Mod Options Menu is not required and can be disabled.**
 
 An independent Helldivers 2 configuration framework inspired by the original Skyrim/SkyUI and Fallout 4 MCM. The provisional project name is local; nothing has been published.
 
@@ -26,9 +26,9 @@ Run `python native/build.py` (Windows x64 with Visual Studio C++ tools), then `p
 - Page Up/Down selects a subpage; Home restores the selected setting's default.
 - F10 or Escape closes; a key-binding prompt uses Escape to cancel.
 
-Values save immediately after accepted edits. **No Apply button** is needed for new API settings. Imported Bingus pages apply changes immediately through the original menu's saved values and callbacks. Action callbacks may implement their own confirmation or transaction. This differs from the installed Mod Options Menu's Apply workflow.
+Values save immediately after accepted edits. **No Apply button** is needed for new API settings. Compatibility pages apply changes immediately through the active provider's values and callbacks. Action callbacks may implement their own confirmation or transaction. This differs from the installed Mod Options Menu's Apply workflow.
 
-Do not disable the existing Mod Options Menu yet: current HUD and test pod still depend on it. This preview uses a separate `DBFMCM` global and does not intercept that menu.
+Bingus Mod Options Menu can be disabled. DBF-HUD registers its pages directly with MCM, and MCM supplies the ModOptionsMenu compatibility API for existing mods. Restart the game after changing providers so mods can register again.
 
 ## For mod authors
 
@@ -40,7 +40,9 @@ Read [input capture details and limitations](docs/INPUT-CAPTURE.md). Build: `pyt
 
 ## Bingus compatibility
 
-Keep Bingus Mod Options Menu enabled. The bridge reads its named Lua registry upvalue, including registrations beyond the native eight-page limit, and imports toggle, choice and slider controls. It does not replace its global API or copy its native menu code. Existing and late registrations appear automatically. This internal registry dependency is version-sensitive; unfamiliar registry layouts are left untouched. In-game appearance and callback behavior still require verification.
+Bingus Mod Options Menu is optional. When it is absent, MCM provides its API for toggle, choice and slider registrations, values and change callbacks. Compatibility registrations persist across MCM reloads; Shallow Water Diving was verified live to remain available after reload. If the original menu is enabled, MCM can import its registry instead. Bingus Shared Loader is a separate prerequisite and remains required.
+
+Compatibility with every third-party mod is not yet verified. Original-menu saved values are not automatically migrated, and dynamic translation parity remains unverified. Intermittent dropdown text loss is under investigation.
 
 Mouse wheel: hover the settings area to scroll three rows per notch; hover the left mod list to move through mods. Wheel scrolling leaves setting values unchanged. Raw mouse wheel packets are consumed by the native helper while capture is active.
 
