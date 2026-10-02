@@ -396,7 +396,15 @@ function M.new(api)
             text(365,113,(help or ''):sub(104,206),18,muted)
         end
         text(25,32,'F10 Close   Tab Focus   Arrows Change   Enter Select   Home Default',17,muted)
-        text(900,32,self.notice:sub(1,48),17,accent)
+        -- Show the actual status, not a fixed character slice of a Lua error.
+        local notice=self.notice:gsub('[%w_./\\-]+%.lua:%d+:%s*','')
+        local lines,line={},''
+        for word in notice:gmatch('%S+')do
+            if #line>0 and #line+#word+1>58 then lines[#lines+1]=line;line=word
+            else line=#line==0 and word or line..' '..word end
+        end
+        if #line>0 then lines[#lines+1]=line end
+        for i,message in ipairs(lines)do text(900,32+(#lines-i)*20,message,15,accent)end
         if self.dropdown then
             local overlay_start=#commands+1
             local d=self.dropdown;local count=math.min(8,#d.control.choices);local height=count*31+8
