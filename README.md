@@ -16,21 +16,21 @@ This is a first executable preview, **not a finished MCM equivalent**. The regis
 
 Implemented: toggle, slider, choice, key binding capture, action button, section, text; named pages; optional two-column placement; descriptions; disabled controls; default restoration; per-mod persisted values; callback isolation; late registration and unregister/reload lifecycle; mouse click selection and keyboard navigation.
 
-Not yet implemented: native Escape-menu entry, controller navigation, editable text/color dialogs, dynamic visibility conditions, dependency/version messaging, JSON menu loading, localization, whole-page defaults, and automatic replacement of the native ModOptionsMenu UI. Existing Bingus registrations are mirrored through a compatibility adapter; their original mods remain installed.
+Not yet implemented: native Escape-menu entry, controller navigation, dynamic visibility conditions, dependency/version messaging, JSON menu loading, localization, whole-page defaults, and full compatibility with every native ModOptionsMenu consumer. Existing mods register through a compatibility adapter; their original mod packages remain installed.
 
-## Try the local preview
+## Install with Bingus Shared Loader
 
-Run `python native/build.py` (Windows x64 with Visual Studio C++ tools), then `python build.py --install`, refresh MDL's list, enable **Mod Configuration Menu (Preview)**, and press **F10**. The preview now acquires the cursor and filters window keyboard/mouse input while open. This native capture candidate still needs an in-game check; test from the pause menu first. Release mouse buttons before opening. The preview does not pause the simulation. Opening uses physical F10 only. The native binding shortcut is temporarily disabled because its action can alias game navigation.
+1. Install [Bingus Shared Loader](https://github.com/CowboyBingus/BingusSharedLoader/releases) following its instructions.
+2. Download the **DBF-MCM Standalone** ZIP from [MCM prereleases](https://github.com/HWG90/DBF-MCM/releases).
+3. Close the game, import the ZIP into [Arsenal](https://www.nexusmods.com/helldivers2/mods/4664), enable it with Shared Loader, and deploy.
+4. Disable any existing MCM instance in MDL. Bingus Mod Options can also be disabled. Run only one MCM instance.
+5. Restart the game and press F10. Restart once after switching option providers so other mods can register.
 
-- Mouse: click a mod, page, or setting. Sliders have draggable handles and clickable tracks; values snap to their configured step and commit on release. Choices have previous/next buttons; toggles and actions have visible controls.
-- Tab switches focus between mods and settings.
-- Up/Down selects; Left/Right changes a value; Enter activates.
-- Page Up/Down selects a subpage; Home restores the selected setting's default.
-- F10 or Escape closes; a key-binding prompt uses Escape to cancel.
+The Standalone archive contains no MDL startup mod and does not require MDL. It cannot disable a previously installed MDL instance automatically. The separate MDL ZIP is an optional developer/live-reload alternative.
 
-Values save immediately after accepted edits. **No Apply button** is needed for new API settings. Compatibility pages apply changes immediately through the active provider's values and callbacks. Action callbacks may implement their own confirmation or transaction. This differs from the installed Mod Options Menu's Apply workflow.
+Mouse selects settings; wheel scrolls lists, Tab changes focus, arrows navigate, Enter selects, and F10 or Escape closes. Action confirmations use Apply. Preset filenames commit when you click away. The menu does not pause gameplay.
 
-Bingus Mod Options Menu can be disabled. DBF-HUD registers its pages directly with MCM, and MCM supplies the ModOptionsMenu compatibility API for existing mods. Restart the game after changing providers so mods can register again.
+See [Standalone installation and validation](docs/INSTALL-STANDALONE.md). Third-party registrations survive MCM reload in the verified Shallow Water Diving test; compatibility with every mod is not established. Intermittent missing dropdown text remains under investigation.
 
 ## For mod authors
 
