@@ -2,7 +2,7 @@
 import ctypes,os
 from pathlib import Path
 root=Path(__file__).resolve().parents[1];os.chdir(root);(root/'tests/tmp').mkdir(exist_ok=True)
-dll=ctypes.CDLL(os.getenv('DBFMCM_LUA_DLL',r'C:\Program Files (x86)\Steam\steamapps\common\Helldivers 2\bin\lua51.dll'))
+dll=ctypes.CDLL(r'C:\Program Files (x86)\Steam\steamapps\common\Helldivers 2\bin\lua51.dll')
 dll.luaL_newstate.restype=ctypes.c_void_p;state=dll.luaL_newstate()
 dll.luaL_openlibs.argtypes=[ctypes.c_void_p];dll.luaL_openlibs(state)
 dll.luaL_loadfile.argtypes=[ctypes.c_void_p,ctypes.c_char_p];dll.lua_pcall.argtypes=[ctypes.c_void_p,ctypes.c_int,ctypes.c_int,ctypes.c_int]

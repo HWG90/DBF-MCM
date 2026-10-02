@@ -72,7 +72,6 @@ return {
                 {id='color',type='color',label='Example color',default='#F4CA35',description='RGB and HEX input with a preview swatch.'},
                 {id='amount',type='slider',label='Example slider',min=0,max=100,step=5,default=50,description='Left and right change the value; Home restores the default.'},
                 {id='style',type='choice',label='Example choice',choices={'Standard','Compact','Wide'},default=1,description='Click or press left/right to cycle choices.'},
-                {id='name',type='input',label='Example name',default='My preset',max_length=80,description='Text saves on Enter, Tab, or leaving the field; Escape cancels.'},
                 {id='key',type='keybind',label='Example key binding',default=0,description='Select, then press a key; Escape cancels. This stores a key code; the mod handles the action.'},
                 {id='action',type='button',label='Example action',description='A callback button; not a persisted setting.',on_activate=function()ctx.log('MCM example action activated')end}}}}})
         ctx.log('MCM preview enabled; F10 opens the menu. Existing Mod Options Menu is unchanged.')

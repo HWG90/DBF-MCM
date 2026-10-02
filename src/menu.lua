@@ -20,8 +20,8 @@ function M.new(api)
         if not current or c.disabled then return end
         local h=current.handle;local ok,err=true
         if c.type=='button' then if direction==0 then ok,err=(h.queue or h.activate)(c.id)end
+        elseif c.type=='input' then self.text_edit={mod=current,control=c,text=(h.preview or h.get)(c.id),replace=true};self.notice='Type name; Enter accepts';return
         elseif c.type=='keybind' then self.capture=c;self.notice='Press a key. Escape cancels.';return
-        elseif c.type=='input' then self.text_edit={mod=current,control=c,text=(h.preview or h.get)(c.id),replace=true};return
         else
             local v=(h.preview or h.get)(c.id)
             if c.type=='toggle' then v=not v
@@ -53,25 +53,18 @@ function M.new(api)
         if called and ok then self.notice=p.control.page.require_confirmation and 'Pending confirmation' or 'Saved';self.color_picker=nil
         else self.notice=tostring(called and err or ok)end
     end
-    function self.finish_input()
-        local e=self.text_edit;if not e or not e.control or e.control.type~='input' then return true end
-        local called,ok,err=pcall(e.mod.handle.edit or e.mod.handle.set,e.control.id,e.text)
-        if not called or not ok then self.notice=tostring(called and err or ok);return false end
-        self.text_edit=nil;self.notice=e.control.page.require_confirmation and 'Pending confirmation' or 'Saved';return true
-    end
-    function self.key(code,ctrl,shift)
+    function self.key(code,ctrl)
         if code==121 then drag=nil;window_drag=nil;self.dropdown=nil;self.text_edit=nil;self.color_picker=nil end
         if code==121 then self.visible=not self.visible;self.capture=false;return end -- F10
         if not self.visible then return end
         if self.text_edit then
             local e=self.text_edit
             if code==27 then self.text_edit=nil;return end
-            if e.control and e.control.type=='input' and (code==13 or code==9)then self.finish_input();return end
             if code==9 and e.color_channel then self.finish_color_field();return end
             if code==13 then
                 if e.color_channel then self.finish_color_field();return end
-                local value=tonumber(e.text)
-                if not value or value~=value or value<e.control.min or value>e.control.max then
+                local value=e.control.type=='input' and e.text or tonumber(e.text)
+                if e.control.type~='input' and (not value or value~=value or value<e.control.min or value>e.control.max) then
                     self.notice='Enter a number from '..e.control.min..' to '..e.control.max;return
                 end
                 local called,ok,err=pcall(e.mod.handle.edit or e.mod.handle.set,e.control.id,value)
@@ -86,18 +79,11 @@ function M.new(api)
             elseif code>=96 and code<=105 then char=tostring(code-96)
             elseif code==189 or code==109 then char='-'
             elseif code==190 or code==110 then char='.' end
+            if e.control and e.control.type=='input' then if code>=65 and code<=90 then char=string.char(code) elseif code==32 then char=' ' end end
             if e.color_channel=='hex' and code>=65 and code<=70 then char=string.char(code)end
-            if e.control and e.control.type=='input' then
-                if code>=65 and code<=90 then char=string.char(shift and code or code+32)
-                elseif code==32 then char=' '
-                elseif code>=48 and code<=57 and shift then char=(')!@#$%^&*('):sub(code-47,code-47)
-                else local keys={[186]={';',':'},[187]={'=','+'},[188]={',','<'},[189]={'-','_'},[190]={'.','>'},[191]={'/','?'},[192]={'`','~'},[219]={'[','{'},[220]={'\\','|'},[221]={']','}'},[222]={"'",'"'}}
-                    if keys[code]then char=keys[code][shift and 2 or 1]end
-                end
-            end
             if char and not ctrl then
                 if e.replace then e.text='';e.replace=false end
-                if #e.text<(e.control and e.control.type=='input' and (e.control.max_length or 256) or 24) then e.text=e.text..char end
+                if #e.text<(e.control and e.control.type=='input' and 48 or 24) then e.text=e.text..char end
             end
             return
         end
@@ -204,10 +190,10 @@ function M.new(api)
             return
         end
         if not self.color_picker and not drag and not window_drag and not self.text_edit and input.wheel and input.mouse then local delta=input.wheel();local x,y=input.mouse();self.wheel(delta,x,y)end
-        for code=1,255 do local down=input.down(code);if down and not held[code] and code~=1 then self.key(code,input.down(17),input.down(16))end;held[code]=down end
+        for code=1,255 do local down=input.down(code);if down and not held[code] and code~=1 then self.key(code,input.down(17))end;held[code]=down end
         if self.visible and input.mouse then
             local x,y=input.mouse();if x and y and input.down(1) and not self.mouse_held then
-                local valid=self.finish_color_field() and self.finish_input()
+                local valid=self.finish_color_field()
                 if valid then self.text_edit=nil end
                 for i=#hits,1,-1 do local h=hits[i];if x>=h.x and x<=h.x+h.w and y>=h.y and y<=h.y+h.h then if valid then h.click(x,y)end;break end end
             end
@@ -362,10 +348,9 @@ function M.new(api)
                                 drag=d;d.move(mx)
                             end)
                         elseif c.type=='input' then
-                            local editing=self.text_edit and self.text_edit.mod==mod and self.text_edit.control==c
-                            rect(x+245,y-5,280,29,{35,42,48})
-                            text(x+255,y,(editing and self.text_edit.text..'|' or value):sub(-24),18,editing and accent or white)
-                            hit(x+245,y-5,280,29,function()if control.disabled then return end;select();change(control,0)end)
+                            local editing=self.text_edit and self.text_edit.control==c
+                            rect(x+275,y-5,250,29,{35,42,48})
+                            text(x+285,y,editing and self.text_edit.text..'|' or value,18,white)
                         elseif c.type=='color' then
                             rect(x+300,y-3,34,23,api.color_rgb(value));rect(x+350,y-5,175,29,{35,42,48});text(x+360,y,value,18,white)
                             hit(x+295,y-7,230,34,function()if control.disabled then return end;select();self.color_picker={mod=owner,control=control,rgb=api.color_rgb((owner.handle.preview or owner.handle.get)(control.id))}end)
@@ -392,6 +377,12 @@ function M.new(api)
             end
             scrollbar('settings',1480,196,456,#page.controls,12,self.scroll)
             if #page.controls>12 then text(365,166,'Rows '..(self.scroll+1)..'-'..math.min(self.scroll+12,#page.controls)..' of '..#page.controls,16,muted)end
+            if type(page.render_preview)=='function' then
+                local ok,preview=pcall(page.render_preview,{x=ox+950*s,y=oy+285*s,w=460*s,h=350*s,scale=s})
+                if ok and type(preview)=='table' then
+                    for _,command in ipairs(preview)do command.layer=110;commands[#commands+1]=command end
+                end
+            end
             local help=selected and selected.description or mod.description
             text(365,140,(help or ''):sub(1,103),18,muted)
             text(365,113,(help or ''):sub(104,206),18,muted)

@@ -29,7 +29,6 @@ IDs use letters, numbers, underscore and hyphen, up to 80 bytes. Mod IDs must be
 | toggle | id, label, default | boolean |
 | slider | id, label, min, max, step, default | finite, bounded, snapped number |
 | choice | id, label, choices, default | 1-based index |
-| color | id, label, default | canonical #RRGGBB |
 | keybind | id, label, default | Windows virtual-key code 0–255; 0 unbound |
 | button | id, label, on_activate | none |
 | section/text | label | none |
@@ -46,7 +45,7 @@ After a successful save, the value is committed and callbacks run independently.
 
 ## Compatibility boundaries
 
-This is an independent API, not a drop-in global replacement for CowboyBingus ModOptionsMenu or Bethesda's Papyrus/F4SE APIs. Never overwrite another framework's global. The included explicit ModOptionsMenu adapter preserves existing callbacks and saved IDs. Existing registrations cannot be recovered solely through its public `get`/`set` interface.
+This is an independent API, not a drop-in global replacement for CowboyBingus ModOptionsMenu or Bethesda's Papyrus/F4SE APIs. Never overwrite another framework's global. ModOptionsMenu compatibility must be implemented as an explicit adapter and tested against existing callbacks and saved IDs. Existing registrations cannot be recovered solely through its public `get`/`set` interface.
 
 ## Pages requiring confirmation
 
@@ -91,27 +90,3 @@ The compatibility adapter explicitly groups DBF-HUD Layout Editor and DBF-HUD Pl
 The picker also offers a draggable hue/saturation spectrum and brightness strip. SAVE SWATCH stores the current preview in a shared persistent palette (12 most recent unique colors). `DBFMCM.save_swatch(value)` returns success/error; `DBFMCM.swatches()` returns canonical HEX strings. Palette persistence is independent of the edited mod and does not apply its color setting.
 
 Select a custom swatch (outlined in yellow), edit its color, then click REPLACE to overwrite that slot. SAVE SWATCH still adds a color. `DBFMCM.replace_swatch(index, value)` overwrites an existing 1-based slot and returns success/error; failed writes leave the palette unchanged.
-
-Choice lists support at least 100 items (covered by a contract test). Eight items are visible in an open popup; wheel, scrollbar clicks and Page Up/Down navigate the remaining entries. Bingus imported definitions still inherit its registration limit; new DBFMCM definitions bypass that native limit.
-
-## Creator defaults
-Every saved control must declare `default` in its definition: booleans for toggles, numbers for sliders and keybinds, a 1-based index for choices, or RGB/HEX for colors. The framework validates and normalizes it at registration.
-
-```lua
-{id='accent', type='color', label='Accent', default='#F4CA35'}
-{id='opacity', type='slider', label='Opacity', min=0, max=100, step=1, default=75}
-```
-
-`handle.get_default('opacity')` returns the normalized creator default. `handle.reset('opacity')` saves that default and runs the change callback. Valid saved user settings take precedence; missing or invalid saved settings use the default. Updating a default does not overwrite an existing valid user setting.
-
-## Editable text
-Use `input` for editable single-line values; `text` remains a read-only label.
-
-```lua
-{id='preset_name', type='input', label='Preset name', default='My preset',
- max_length=80,
- validate=function(value) return #value>0, 'Enter a name' end,
- on_change=function(value) selected_name=value end}
-```
-
-Defaults and saved values are strings. `max_length` is a byte limit (default 256, maximum 4096). Optional `validate(value)` returns true to accept, or false plus an error message. Enter, Tab, or clicking away validates and saves; invalid input remains active. Escape cancels. Confirmation pages stage text like other settings. Shift punctuation, ASCII letters, numbers, spaces, Backspace, Delete and Ctrl+A are supported. This first version uses US keyboard mapping; clipboard paste, IME and caret selection are not implemented. Strings are escaped in settings files and never executed. A filename field only passes text to your callback: authors must validate paths and perform file operations themselves.

@@ -1,12 +1,12 @@
 """Build the local x64 helper with MSVC. Does not attach to the game."""
 from pathlib import Path
-import subprocess,hashlib,os
+import subprocess,hashlib
 root=Path(__file__).resolve().parents[1]
 source=root/'native/input_guard.c'
 tag=hashlib.sha256(source.read_bytes()).hexdigest()[:12]
 out=root/'native/build';out.mkdir(parents=True,exist_ok=True)
 name='mcm_input_'+tag+'.dll'
-vcvars=Path(os.getenv('DBFMCM_VCVARS',r'C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat'))
+vcvars=Path(r'C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat')
 assert vcvars.is_file(),'MSVC x64 build environment missing'
 cmd=f'call "{vcvars}" >nul && cl /nologo /LD /O2 /W4 /WX "{source}" /Fo"{out / "input_guard.obj"}" /link /OUT:"{out / name}" user32.lib'
 subprocess.run(cmd,shell=True,check=True,cwd=out)

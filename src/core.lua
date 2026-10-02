@@ -21,12 +21,7 @@ function M.rgb_hsv(rgb)
  return h,hi==0 and 0 or delta/hi,hi
 end
 local function normalize(c,v)
-    if c.type=='input' then
-        assert(type(v)=='string' and not v:find('[%c]'),'Expected single-line text')
-        assert(#v<=(c.max_length or 256),'Text exceeds maximum length')
-        if c.validate then local ok,why=c.validate(v);assert(ok,why or 'Invalid text')end
-        return v
-    end
+    if c.type=='input' then assert(type(v)=='string' and #v<=48 and v:match('^[%w _-]+$'),'Use letters, numbers, spaces, underscores or hyphens');return v end
     if c.type=='color' then return M.color_hex(v)end
     if c.type=='toggle' then assert(type(v)=='boolean','Expected boolean');return v end
     assert(type(v)=='number' and v==v and math.abs(v)<1e12,'Expected finite number')
@@ -40,7 +35,7 @@ local function normalize(c,v)
 end
 local function stored(c)return c.type=='input' or c.type=='toggle' or c.type=='slider' or c.type=='choice' or c.type=='keybind' or c.type=='color'end
 function M.new(store,log)
-    local api={api=1,version='0.1.27',color_hex=M.color_hex,color_rgb=M.color_rgb,hsv_rgb=M.hsv_rgb,rgb_hsv=M.rgb_hsv,mods={},revision=0};log=log or function()end
+    local api={api=1,version='0.1.24',color_hex=M.color_hex,color_rgb=M.color_rgb,hsv_rgb=M.hsv_rgb,rgb_hsv=M.rgb_hsv,mods={},revision=0};log=log or function()end
     local palette=store and store.load('mcm_custom_palette') or {};local swatches={}
     for i=1,12 do local ok,v=pcall(M.color_hex,palette['swatch_'..i]);if ok then swatches[#swatches+1]=v end end
     function api.swatches()return copy(swatches)end
@@ -78,14 +73,10 @@ function M.new(store,log)
             id(definition.id);assert(not pages[definition.id],'Duplicate page');pages[definition.id]=true
             assert(definition.require_confirmation==nil or type(definition.require_confirmation)=='boolean','require_confirmation must be boolean')
             assert(definition.category==nil or categories[definition.category],'Unknown page category')
-            local page={category=definition.category,id=definition.id,name=plain(definition.name),controls={},require_confirmation=definition.require_confirmation==true,pending={},actions={}}
+            local page={category=definition.category,id=definition.id,name=plain(definition.name),render_preview=definition.render_preview,controls={},require_confirmation=definition.require_confirmation==true,pending={},actions={}}
             for _,definition_control in ipairs(definition.controls or {})do
                 local c=copy(definition_control);c.page=page;plain(c.label or '');plain(c.description or '')
                 assert(({input=true,color=true,toggle=true,slider=true,choice=true,keybind=true,button=true,text=true,section=true})[c.type],'Unsupported control')
-                if c.type=='input' then
-                    assert(c.max_length==nil or (type(c.max_length)=='number' and c.max_length%1==0 and c.max_length>=1 and c.max_length<=4096),'Invalid maximum length')
-                    assert(c.validate==nil or type(c.validate)=='function','Invalid text validator')
-                end
                 assert(c.column==nil or c.column==1 or c.column==2,'Column must be 1 or 2')
                 if c.type~='text' and c.type~='section' then
                     id(c.id);assert(not mod.controls[c.id],'Duplicate control ID');mod.controls[c.id]=c
@@ -167,8 +158,7 @@ function M.new(store,log)
             for _,c in ipairs(p.controls)do if actions[c.id]then local ok,err=handle.activate(c.id);if not ok then return false,err end end end
             return true
         end
-        function handle.get_default(key)return assert(mod.controls[key],'Unknown control').default end
-        function handle.reset(key)return handle.set(key,handle.get_default(key))end
+        function handle.reset(key)return handle.set(key,assert(mod.controls[key],'Unknown control').default)end
         function handle.activate(key)
             local c=assert(mod.controls[key],'Unknown control');assert(c.type=='button' and not c.disabled,'Button unavailable')
             return pcall(c.on_activate)
@@ -177,7 +167,7 @@ function M.new(store,log)
         mod.handle=handle;return handle
     end
     function api.list()
-        local list={};for _,mod in pairs(api.mods)do list[#list+1]=mod end
+        local list={};for _,mod in pairs(api.mods)do if not mod.hidden then list[#list+1]=mod end end
         table.sort(list,function(a,b)if a.name==b.name then return a.id<b.id end;return a.name<b.name end)
         return list
     end

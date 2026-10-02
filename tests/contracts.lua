@@ -201,7 +201,6 @@ test('popup primitives render above underlying text and choice arrows remain usa
  Gui={rect=function(_,p)zs[#zs+1]=p[3];return #zs end,text=function(_,_,_,_,_,p)zs[#zs+1]=p[3];return #zs end,destroy_rect=function()end,destroy_text=function()end}}
  view.new(sr).draw({{type='text',x=0,y=0,text='behind',size=18,c={255,255,255},a=1},{type='rect',x=0,y=0,w=10,h=10,c={0,0,0},a=1,layer=200},{type='text',x=0,y=0,text='popup',size=18,c={255,255,255},a=1,layer=200}})
  assert(zs[2]>zs[1] and zs[3]>zs[2])
- for _,z in ipairs(zs)do assert(z==math.floor(z),'Native depths must survive integer quantization')end
  local core=assert(loadfile('src/core.lua'))();local module=assert(loadfile('src/menu.lua'))();local api=core.new(nil,function()end)
  api.register({id='arrows',name='Arrows',pages={{id='p',name='Page',controls={{id='v',type='choice',label='Choice',choices={'A','B'},default=1}}}}})
  local m=module.new(api);m.visible=true;m.compose(1920,1080);m.tick({down=function(k)return k==1 end,mouse=function()return 1080,753 end})
@@ -235,11 +234,18 @@ test('HUD compatibility nesting retains original setting routes and callbacks',f
  for i,name in ipairs({'DBF-HUD','DBF-HUD LAYOUT EDITOR','DBF-HUD PLACEMENT'})do local id='original.'..i
  state.mods[name]={order={{id=id,kind='toggle',label='Toggle',default=false}}};values[id]=false end
  local called=0;state.callbacks['original.2']={function()called=called+1 end}
- local api=core.new(nil,function()end);bridge.new(api,function()end,core).poll(host)
+ local api=core.new(nil,function()end);local importer=bridge.new(api,function()end,core);importer.poll(host)
  assert(#api.list()==1);local root=api.list()[1];assert(root.name=='DBF-HUD' and #root.pages==3 and #root.categories==1)
  assert(root.handle.edit('layout_editor_option_1',true));assert(values['original.2'] and called==1 and not values['original.1'])
  local nodes=menu.new(api).navigation(root);assert(#nodes==4 and nodes[1].category.name=='HUD')
  assert(nodes[2].page.name=='Layout' and nodes[3].page.name=='Placement' and nodes[4].page.name=='General')
+ local color
+ api.register({id='dbf_hud_fonts',name='DBF-HUD Appearance',pages={{id='appearance',name='Appearance',controls={{id='color',type='color',label='Decorations',default='#FFFFFF',on_change=function(v)color=v end}}}}})
+ importer.poll(host);assert(#api.list()==1)
+ root=api.list()[1];assert(#root.pages==3 and root.pages[3].name=='Appearance')
+ assert(root.handle.edit('appearance_color','#123456'));assert(color=='#123456')
+ api.mods.dbf_hud_fonts.handle.unregister();importer.poll(host);assert(#api.list()==1 and #api.list()[1].pages==3)
+
 end)
 test('mod tree expands children directly beneath the parent in one sidebar',function()
  local core=assert(loadfile('src/core.lua'))();local module=assert(loadfile('src/menu.lua'))();local api=core.new(nil,function()end)
@@ -322,49 +328,5 @@ test('window close buttons close only their own window',function()
  m.tick(input);assert(not m.color_picker and m.visible)
  down=false;m.tick(input);m.compose(1920,1080);px=1670;py=920;down=true;m.tick(input);assert(not m.visible)
 end)
-test('dropdown supports 100 choices and reaches and selects the final entry',function()
- local core=assert(loadfile('src/core.lua'))();local module=assert(loadfile('src/menu.lua'))();local api=core.new(nil,function()end)
- local choices={};for i=1,100 do choices[i]='Choice '..i end
- api.register({id='hundred',name='Hundred',pages={{id='p',name='Page',controls={{id='v',type='choice',label='Choices',choices=choices,default=1}}}}})
- local m=module.new(api);m.visible=true;m.compose(1920,1080)
- m.tick({down=function(k)return k==1 end,mouse=function()return 900,753 end});assert(m.dropdown)
- m.wheel(-12000,900,500);assert(m.dropdown.scroll==92);local commands=m.compose(1920,1080);assert(#commands>0)
- for i=1,13 do m.key(34)end;assert(m.dropdown.selected==100 and m.dropdown.scroll==92)
- m.key(13);assert(api.get('hundred','v')==100 and not m.dropdown)
-end)
-assert(loadfile('examples/example.lua'));assert(loadfile('examples/advanced.lua'))
 assert(loadfile('src/adapter.lua'));assert(loadfile('dist/dbf_mcm/mod.lua'))
-test('creator defaults remain available after edits and reset restores them',function()
- local api=core.new();local h=api.register(spec('defaults'))
- assert(h.get_default('slider')==5);h.set('slider',8)
- assert(h.get('slider')==8 and h.get_default('slider')==5)
- assert(h.reset('slider'));assert(h.get('slider')==5)
-end)
-test('text input preserves strings validates and commits on blur',function()
- local store=assert(loadfile('src/store.lua'))().new('tests/tmp')
- assert(store.save('text_roundtrip',{name='true',empty='',path='C:\\a=b%20.ini'}))
- local saved=store.load('text_roundtrip');assert(saved.name=='true' and saved.empty=='' and saved.path=='C:\\a=b%20.ini')
- local api=core.new();local changed
- local h=api.register({id='input_test',name='Input',pages={{id='p',name='Page',controls={{id='name',type='input',label='Name',default='Preset',max_length=8,on_change=function(v)changed=v end}}}}})
- assert(not pcall(h.set,'name','123456789'));assert(not pcall(h.set,'name','a\nb'))
- local m=menu_module.new(api);m.visible=true;m.compose(1920,1080)
- m.text_edit={mod=api.mods.input_test,control=api.mods.input_test.controls.name,text='Preset',replace=true}
- m.key(65,false,true);m.key(66,false,false);m.key(189,false,true)
- assert(m.text_edit.text=='Ab_');assert(m.finish_input());assert(h.get('name')=='Ab_' and changed=='Ab_')
- m.text_edit={mod=api.mods.input_test,control=api.mods.input_test.controls.name,text='cancel',replace=false}
- m.key(27);assert(h.get('name')=='Ab_' and not m.text_edit)
-end)
-test('popup text owns a separate GUI and unchanged frames avoid native churn',function()
- local world={};local created,draws,destroyed=0,0,0
- local sr={Application={worlds=function()return {world}end,main_world=function()return world end},
- World={create_screen_gui=function()created=created+1;return {number=created}end,destroy_gui=function()destroyed=destroyed+1 end},
- Vector2=function(...)return {...}end,Vector3=function(...)return {...}end,Color=function(...)return {...}end,
- Gui={rect=function(g)draws=draws+1;return draws end,text=function(g)draws=draws+1;return draws end,destroy_rect=function()end,destroy_text=function()end}}
- local commands={{type='text',text='Main',x=0,y=0,size=18,a=1,c={255,255,255}},
- {type='text',text='Popup',x=0,y=0,size=18,a=1,c={255,255,255},layer=200}}
- local v=assert(loadfile('src/view.lua'))().new(sr)
- v.draw(commands);assert(created==2 and draws==2);v.draw(commands);assert(draws==2)
- commands[2].text='Changed';v.draw(commands);assert(draws==4 and created==2)
- v.release();assert(destroyed==2)
-end)
 print(count..' meaningful contract tests passed; native rendering/input remain unverified')

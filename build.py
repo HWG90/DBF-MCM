@@ -2,7 +2,6 @@
 from pathlib import Path
 import argparse, shutil, os, zipfile
 ROOT=Path(__file__).resolve().parent
-VERSION=(ROOT/'VERSION').read_text().strip()
 parser=argparse.ArgumentParser();parser.add_argument('--install',action='store_true');args=parser.parse_args()
 parts=['local MCM={}\n']
 for name in ['core','store','menu','view','capture','legacy']:
@@ -14,15 +13,11 @@ dist=ROOT/'dist/dbf_mcm';dist.mkdir(parents=True,exist_ok=True)
 native_name=(ROOT/'native/build/library.txt').read_text().strip()
 shutil.copy2(ROOT/'native/build'/native_name,dist/native_name)
 (dist/'library.txt').write_text(native_name)
-with zipfile.ZipFile(ROOT/f'dist/DBF-MCM-{VERSION}.zip','w',zipfile.ZIP_DEFLATED) as z:
+with zipfile.ZipFile(ROOT/'dist/ModConfigurationMenu-Preview-0.1.24.zip','w',zipfile.ZIP_DEFLATED) as z:
     z.write(dist/'mod.lua','dbf_mcm/mod.lua');z.writestr('dbf_mcm/settings/','')
     z.write(dist/native_name,'dbf_mcm/'+native_name);z.write(dist/'library.txt','dbf_mcm/library.txt')
-    for name in ['README.md','VERSION']:
+    for name in ['README.md','docs/API.md','docs/MCM-REFERENCE.md','docs/INPUT-CAPTURE.md','examples/example.lua','native/input_guard.c','native/build.py','native/test_input_guard.c']:
         z.write(ROOT/name,name)
-    for folder in ['docs','examples','src','native']:
-        for path in sorted((ROOT/folder).rglob('*')):
-            if path.is_file() and 'build' not in path.relative_to(ROOT).parts and '__pycache__' not in path.parts:
-                z.write(path,path.relative_to(ROOT).as_posix())
 if args.install:
     target=Path(os.environ['LOCALAPPDATA'])/'MDL/Helldivers2/Mods/dbf_mcm'
     (target/'settings').mkdir(parents=True,exist_ok=True)
@@ -31,4 +26,4 @@ if args.install:
     shutil.copy2(dist/'mod.lua',target/'mod.lua.pending')
     os.replace(target/'mod.lua.pending',target/'mod.lua')
     print('Installed local MDL preview:',target)
-print(ROOT/f'dist/DBF-MCM-{VERSION}.zip')
+print(ROOT/'dist/ModConfigurationMenu-Preview-0.1.24.zip')

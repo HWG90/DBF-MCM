@@ -7,24 +7,26 @@ local function state_of(host)
  end
 end
 function M.new(api,log,core)
- local self={};local owner,registry;local imported={};local revision=-1
- local function clear()for _,id in ipairs(imported)do api.mods[id]=nil end;imported={};api.revision=api.revision+1 end
+ local self={};local owner,registry;local imported={};local revision=-1;local appearance_seen
+ local function clear()if appearance_seen then appearance_seen.hidden=nil end;for _,id in ipairs(imported)do api.mods[id]=nil end;imported={};api.revision=api.revision+1 end
  function self.release()clear();owner=nil;registry=nil end
  function self.poll(host)
   if host~=owner then clear();owner=host;registry=state_of(host);revision=-1 end
   if not registry then return end
-  if revision==registry.revision then return end
+  local appearance=api.mods.dbf_hud_fonts
+  if revision==registry.revision and appearance==appearance_seen then return end
+  appearance_seen=appearance
   clear();revision=registry.revision
   local names={};for name in pairs(registry.mods)do names[#names+1]=name end;table.sort(names)
   for index,name in ipairs(names)do
    local source=registry.mods[name];local controls={};local links={};local pending={}
    for n,o in ipairs(source.order or {})do
-    if o.kind=='toggle' or o.kind=='slider' or o.kind=='choice' then
+    if (o.kind=='toggle' or o.kind=='slider' or o.kind=='choice') and not (name=='DBF-HUD' and appearance) then
      local key='option_'..n;local c={id=key,type=o.kind,label=o.label or o.id,description=o.description or '',default=o.default,min=o.min,max=o.max,step=o.step,choices=o.choices}
      controls[#controls+1]=c;links[key]=o
     end
    end
-   if #controls>0 then
+   if #controls>0 or (name=='DBF-HUD' and appearance) then
     local id='bingus_'..index;local temp=core.new(nil,log)
     local handle=temp.register({id=id,name=name,description='Bingus Mod Options Menu compatibility. Settings apply immediately.',pages={{id='settings',name='Settings',controls=controls}}})
     local mod=temp.mods[id];mod.legacy=true;local validate_set=handle.set;local validated_get=handle.get
@@ -52,23 +54,25 @@ function M.new(api,log,core)
    elseif mod.name=='DBF-HUD LAYOUT EDITOR' then children.layout_editor=mod
    elseif mod.name=='DBF-HUD PLACEMENT' then children.placement=mod end
   end
+  if root and appearance then children.appearance=appearance end
   if root then
-   local routes={};local base=root.handle
+   local routes={};local page_routes={};local base=root.handle
    for key in pairs(root.controls)do routes[key]={handle=base,key=key}end
    root.categories={{id='hud',name='HUD'}};root.pages[1].name='General';root.pages[1].category='hud'
-   for _,entry in ipairs({{id='layout_editor',name='Layout Editor'},{id='placement',name='Placement'}})do
+   for _,entry in ipairs({{id='layout_editor',name='Layout Editor'},{id='placement',name='Placement'},{id='appearance',name='Appearance'}})do
     local child=children[entry.id]
     if child then
      for _,oldpage in ipairs(child.pages)do
-      local page={id=entry.id..'_'..oldpage.id,name=entry.id=='layout_editor' and 'Layout' or 'Placement',category='hud',controls={},pending={},actions={},require_confirmation=false}
+      local page={id=entry.id..'_'..oldpage.id,name=entry.id=='layout_editor' and 'Layout' or (entry.id=='appearance' and oldpage.name or entry.name),category='hud',render_preview=oldpage.render_preview,controls={},pending={},actions={},require_confirmation=oldpage.require_confirmation==true}
       for _,old in ipairs(oldpage.controls)do
        local c={};for k,v in pairs(old)do c[k]=v end;c.page=page
        if old.id then c.id=entry.id..'_'..old.id;routes[c.id]={handle=child.handle,key=old.id};root.controls[c.id]=c end
        page.controls[#page.controls+1]=c
       end
+      page_routes[page.id]={handle=child.handle,id=oldpage.id}
       root.pages[#root.pages+1]=page
      end
-     api.mods[child.id]=nil
+     if entry.id=='appearance' then child.hidden=true else api.mods[child.id]=nil end
     end
    end
    local grouped={id=root.id}
@@ -79,7 +83,20 @@ function M.new(api,log,core)
      return fn(route.key,...)
     end
    end
+   for _,method in ipairs({'confirm','discard'})do
+    local name=method
+    grouped[name]=function(page_id)
+     local route=page_routes[page_id]
+     if route then return route.handle[name](route.id) end
+     return base[name](page_id)
+    end
+   end
    if #root.pages==3 then root.pages={root.pages[2],root.pages[3],root.pages[1]}end
+   if appearance then
+    local pages={}
+    for _,page in ipairs(root.pages)do if page.name~='General' then pages[#pages+1]=page end end
+    root.pages=pages
+   end
    root.handle=grouped
   end
   api.revision=api.revision+1;log('Imported '..#imported..' Bingus configuration pages')
