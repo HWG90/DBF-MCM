@@ -157,7 +157,8 @@ function M.new(store,log)
             for _,c in ipairs(p.controls)do if actions[c.id]then local ok,err=handle.activate(c.id);if not ok then return false,err end end end
             return true
         end
-        function handle.reset(key)return handle.set(key,assert(mod.controls[key],'Unknown control').default)end
+        function handle.get_default(key)return assert(mod.controls[key],'Unknown control').default end
+        function handle.reset(key)return handle.set(key,handle.get_default(key))end
         function handle.activate(key)
             local c=assert(mod.controls[key],'Unknown control');assert(c.type=='button' and not c.disabled,'Button unavailable')
             return pcall(c.on_activate)

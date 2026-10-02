@@ -201,6 +201,7 @@ test('popup primitives render above underlying text and choice arrows remain usa
  Gui={rect=function(_,p)zs[#zs+1]=p[3];return #zs end,text=function(_,_,_,_,_,p)zs[#zs+1]=p[3];return #zs end,destroy_rect=function()end,destroy_text=function()end}}
  view.new(sr).draw({{type='text',x=0,y=0,text='behind',size=18,c={255,255,255},a=1},{type='rect',x=0,y=0,w=10,h=10,c={0,0,0},a=1,layer=200},{type='text',x=0,y=0,text='popup',size=18,c={255,255,255},a=1,layer=200}})
  assert(zs[2]>zs[1] and zs[3]>zs[2])
+ for _,z in ipairs(zs)do assert(z==math.floor(z),'Native depths must survive integer quantization')end
  local core=assert(loadfile('src/core.lua'))();local module=assert(loadfile('src/menu.lua'))();local api=core.new(nil,function()end)
  api.register({id='arrows',name='Arrows',pages={{id='p',name='Page',controls={{id='v',type='choice',label='Choice',choices={'A','B'},default=1}}}}})
  local m=module.new(api);m.visible=true;m.compose(1920,1080);m.tick({down=function(k)return k==1 end,mouse=function()return 1080,753 end})
@@ -333,4 +334,10 @@ test('dropdown supports 100 choices and reaches and selects the final entry',fun
 end)
 assert(loadfile('examples/example.lua'));assert(loadfile('examples/advanced.lua'))
 assert(loadfile('src/adapter.lua'));assert(loadfile('dist/dbf_mcm/mod.lua'))
+test('creator defaults remain available after edits and reset restores them',function()
+ local api=core.new();local h=api.register(spec('defaults'))
+ assert(h.get_default('slider')==5);h.set('slider',8)
+ assert(h.get('slider')==8 and h.get_default('slider')==5)
+ assert(h.reset('slider'));assert(h.get('slider')==5)
+end)
 print(count..' meaningful contract tests passed; native rendering/input remain unverified')

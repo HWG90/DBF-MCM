@@ -93,3 +93,13 @@ The picker also offers a draggable hue/saturation spectrum and brightness strip.
 Select a custom swatch (outlined in yellow), edit its color, then click REPLACE to overwrite that slot. SAVE SWATCH still adds a color. `DBFMCM.replace_swatch(index, value)` overwrites an existing 1-based slot and returns success/error; failed writes leave the palette unchanged.
 
 Choice lists support at least 100 items (covered by a contract test). Eight items are visible in an open popup; wheel, scrollbar clicks and Page Up/Down navigate the remaining entries. Bingus imported definitions still inherit its registration limit; new DBFMCM definitions bypass that native limit.
+
+## Creator defaults
+Every saved control must declare `default` in its definition: booleans for toggles, numbers for sliders and keybinds, a 1-based index for choices, or RGB/HEX for colors. The framework validates and normalizes it at registration.
+
+```lua
+{id='accent', type='color', label='Accent', default='#F4CA35'}
+{id='opacity', type='slider', label='Opacity', min=0, max=100, step=1, default=75}
+```
+
+`handle.get_default('opacity')` returns the normalized creator default. `handle.reset('opacity')` saves that default and runs the change callback. Valid saved user settings take precedence; missing or invalid saved settings use the default. Updating a default does not overwrite an existing valid user setting.

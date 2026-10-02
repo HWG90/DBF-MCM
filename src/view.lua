@@ -17,8 +17,17 @@ function M.new(sr)
             gui=sr.World.create_screen_gui(world,'scale',1,1)
         end
         self.clear()
+        local order={};local depths={}
+        for index in ipairs(commands)do order[index]=index end
+        table.sort(order,function(a,b)
+            local x,y=commands[a].layer or 100,commands[b].layer or 100
+            return x==y and a<b or x<y
+        end)
+        for rank,index in ipairs(order)do depths[index]=rank end
         for index,c in ipairs(commands)do
-            local z=(c.layer or 100)+index*.01
+            -- Native GUI depth may quantize fractional steps. Keep each primitive
+            -- on a distinct integer plane, with ranks local to its popup layer.
+            local z=depths[index]
             local color=sr.Color(math.floor(c.a*255+.5),c.c[1],c.c[2],c.c[3]);local value
             if c.type=='rect' then value=G.rect(gui,sr.Vector3(c.x,c.y,z),sr.Vector2(c.w,c.h),color)
             else value=G.text(gui,c.text,'core/performance_hud/debug',c.size,'core/performance_hud/debug',sr.Vector3(c.x,c.y,z),color)end
