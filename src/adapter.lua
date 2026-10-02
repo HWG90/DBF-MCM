@@ -45,8 +45,8 @@ return {
         local folder=assert(os.getenv('LOCALAPPDATA'),'LOCALAPPDATA unavailable')..'/MDL/Helldivers2/Mods/dbf_mcm/settings'
         local storage=MCM.store.new(folder)
         if not rawget(_G,'ModOptionsMenu') then
-            local compat,registry=MCM.compat.new(storage,rawget(_G,'DBFMCMCompatRegistry'))
-            rawset(_G,'DBFMCMCompatRegistry',registry) -- Survives menu reload; client mods keep their registrations.
+            local compat,registry=MCM.compat.new(storage,package.loaded['dbf_mcm.compat_registry'])
+            package.loaded['dbf_mcm.compat_registry']=registry -- Shared storage is not an MDL-owned global.
             ctx.global('ModOptionsMenu',compat);ctx.log('MCM provides ModOptionsMenu API 1 compatibility')
         end
         api=MCM.core.new(storage,ctx.log);menu=MCM.menu.new(api);view=MCM.view.new(sr)

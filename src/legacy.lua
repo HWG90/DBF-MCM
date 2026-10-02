@@ -21,7 +21,7 @@ function M.new(api,log,core)
    clear();owner=host;registry=state_of(host);revision=-1
    -- Preserve registrations from either provider, including the original API.
    -- Native mods may register before MCM supplies its compatibility API.
-   if registry then rawset(_G,'DBFMCMCompatRegistry',registry)end
+   if registry then package.loaded['dbf_mcm.compat_registry']=registry end
   end
   if not registry then return end
   local appearance=api.mods.dbf_hud_fonts
