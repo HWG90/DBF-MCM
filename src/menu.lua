@@ -319,7 +319,15 @@ function M.new(api)
                     local x=365+(col-1)*550;local y=623-(columns[col]-1)*38;local row_index=selected_row
                     if c==selected then rect(x-5,y-7,525,34,{50,58,65})end
                     local color=c.disabled and muted or accent
-                    text(x,y,(c.label or ''):sub(1,c.type=='slider' and 23 or 27),20,c.disabled and muted or (c.type=='section' and accent or white))
+                    local informational=c.type=='text' or c.type=='section'
+                    local label=c.label or ''
+                    local label_size=20
+                    if informational then
+                        -- Informational rows have no value widget; use the available page width.
+                        local width=c.column and 525 or 1110
+                        label_size=math.min(20,width/math.max(1,#label)/.62)
+                    else label=label:sub(1,c.type=='slider' and 23 or 27)end
+                    text(x,y,label,label_size,c.disabled and muted or (c.type=='section' and accent or white))
                     if c.type~='text' and c.type~='section' then
                         local value=(mod.handle.preview or mod.handle.get)(c.id);local control=c;local owner=mod
                         local function select()self.row=row_index;self.focus='settings'end

@@ -1,6 +1,10 @@
 local api,menu,view,registered,input,log,capture;local legacy;local diagnostic;local binding_host;local held_toggle=false;local retired=false
 local function close()
-    if legacy then legacy.release();legacy=nil end
+    if legacy then
+        -- Capture the active provider before MDL unwinds its registered globals.
+        legacy.poll(rawget(_G,'ModOptionsMenu'))
+        legacy.release();legacy=nil
+    end
     retired=true;if registered then registered.unregister();registered=nil end
     if capture then capture.release();capture=nil end
     if view then view.release();view=nil end

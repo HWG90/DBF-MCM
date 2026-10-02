@@ -17,7 +17,12 @@ function M.new(api,log,core)
  end
  function self.release()clear();owner=nil;registry=nil end
  function self.poll(host)
-  if host~=owner then clear();owner=host;registry=state_of(host);revision=-1 end
+  if host~=owner then
+   clear();owner=host;registry=state_of(host);revision=-1
+   -- Preserve registrations from either provider, including the original API.
+   -- Native mods may register before MCM supplies its compatibility API.
+   if registry then rawset(_G,'DBFMCMCompatRegistry',registry)end
+  end
   if not registry then return end
   local appearance=api.mods.dbf_hud_fonts
   if revision==registry.revision and appearance==appearance_seen then return end
