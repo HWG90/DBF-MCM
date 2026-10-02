@@ -1,3 +1,5 @@
+![Diver's Best Friend - Mod Configuration Menu](assets/branding/banner.png)
+
 # Mod Configuration Menu — development preview
 
 An independent Helldivers 2 configuration framework inspired by the original Skyrim/SkyUI and Fallout 4 MCM. The provisional project name is local; nothing has been published.
@@ -47,3 +49,4 @@ Drag the title bar to reposition the menu. Its position survives closing/reopeni
 Choice controls open dropdown lists. Scroll the wheel inside an open dropdown, use Up/Down or Page Up/Down, then Enter or click to select. Escape or clicking outside cancels. Long lists have a position scrollbar with click-to-jump support.
 
 Click a slider value box to type a number. The first character replaces the old value; Ctrl+A selects it, Backspace/Delete remove text. Enter validates the range and configured step before committing; Escape or clicking elsewhere cancels. Confirmation pages keep valid edits pending.
+
