@@ -155,8 +155,9 @@ function M.new(store,log)
                 end
             end
             local actions=p.actions;p.actions={};api.revision=api.revision+1
-            for _,c in ipairs(p.controls)do if actions[c.id]then local ok,err=handle.activate(c.id);if not ok then return false,err end end end
-            return true
+            local messages={}
+            for _,c in ipairs(p.controls)do if actions[c.id]then local ok,result=handle.activate(c.id);if not ok then return false,result end;if type(result)=='string' and #result>0 then messages[#messages+1]=result end end end
+            return true,#messages>0 and table.concat(messages,'; ') or nil
         end
         function handle.reset(key)return handle.set(key,assert(mod.controls[key],'Unknown control').default)end
         function handle.activate(key)

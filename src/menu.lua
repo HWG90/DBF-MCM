@@ -118,7 +118,7 @@ function M.new(api)
         if code==27 then self.visible=false;return end
         if page.require_confirmation and (code==120 or code==119)then
             local ok,err;if code==120 then ok,err=mod.handle.confirm(page.id)else ok,err=mod.handle.discard(page.id)end
-            self.notice=ok and (code==120 and 'Confirmed and saved' or 'Pending edits discarded') or tostring(err);return
+            self.notice=ok and (code==120 and ('Confirmed and saved'..(err and '; '..tostring(err) or '')) or 'Pending edits discarded') or tostring(err);return
         end
         if code==9 then self.focus=self.focus=='mods' and 'settings' or 'mods';return end
         if code==33 or code==34 then
@@ -302,7 +302,7 @@ function M.new(api)
                 text(850,90,'CONFIRM REQUIRED ('..pending..')',16,accent)
                 rect(1160,81,135,29,{65,73,80});text(1170,90,'APPLY',18,accent)
                 rect(1310,81,135,29,{65,73,80});text(1320,90,'DISCARD',18,white)
-                hit(1160,81,135,29,function()local ok,err=mod.handle.confirm(page.id);self.notice=ok and 'Confirmed and saved' or tostring(err)end)
+                hit(1160,81,135,29,function()local ok,err=mod.handle.confirm(page.id);self.notice=ok and ('Confirmed and saved'..(err and '; '..tostring(err) or '')) or tostring(err)end)
                 hit(1310,81,135,29,function()mod.handle.discard(page.id);self.notice='Pending edits discarded'end)
             end
             local rows=selectable(page);self.row=math.max(1,math.min(self.row,#rows));local selected=rows[self.row]
