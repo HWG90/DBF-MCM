@@ -230,7 +230,7 @@ function M.new(api)
         if not self.visible then hits={};drag=nil;window_drag=nil;self.dropdown=nil;self.text_edit=nil;self.color_picker=nil;return {}end
         local commands={};hits={};local s=math.min(w/1920,h/1080);local ox,oy=math.max(0,math.min(math.max(0,w-1500*s),self.window_x or (w-1500*s)/2)),math.max(0,math.min(math.max(0,h-820*s),self.window_y or (h-820*s)/2))
         self.window_x,self.window_y=ox,oy
-        local white={224,230,234};local muted={145,156,165};local accent={244,202,53}
+        local white={224,230,234};local muted={145,156,165};local accent={244,202,53};local selection_text={24,30,35}
         local function rect(x,y,rw,rh,color,a)commands[#commands+1]={type='rect',x=ox+x*s,y=oy+y*s,w=rw*s,h=rh*s,c=color,a=a or 1}end
         local function text(x,y,value,size,color)
             commands[#commands+1]={type='text',x=ox+x*s,y=oy+y*s,text=tostring(value),size=(size or 20)*s,c=color or white,a=1}
@@ -267,8 +267,8 @@ function M.new(api)
             local entry=sidebar[i];local y=671-(i-tree_scroll-1)*31;local x=25+entry.depth*16
             if entry.kind=='mod' then
                 local selected=entry.index==self.selected
-                if selected then rect(15,y-6,300,30,{53,61,67})end
-                text(x,y,(entry.open and 'v ' or '> ')..entry.mod.name:sub(1,24),20,selected and accent or white)
+                if selected then rect(15,y-6,300,30,accent)end
+                text(x,y,(entry.open and 'v ' or '> ')..entry.mod.name:sub(1,24),20,selected and selection_text or white)
                 hit(15,y-6,300,30,function()
                     self.selected=entry.index;tree_expanded[entry.mod.id]=not entry.open;self.page=1;self.row=1;self.scroll=0;self.focus='settings';tree_manual=true
                 end)
@@ -317,7 +317,7 @@ function M.new(api)
                 if i>self.scroll and i<=self.scroll+12 then
                     local col=c.column or 1;columns[col]=columns[col]+1
                     local x=365+(col-1)*550;local y=623-(columns[col]-1)*38;local row_index=selected_row
-                    if c==selected then rect(x-5,y-7,525,34,{50,58,65})end
+                    if c==selected then rect(x-5,y-7,525,34,accent)end
                     local color=c.disabled and muted or accent
                     local informational=c.type=='text' or c.type=='section'
                     local label=c.label or ''
@@ -327,7 +327,7 @@ function M.new(api)
                         local width=c.column and 525 or 1110
                         label_size=math.min(20,width/math.max(1,#label)/.62)
                     else label=label:sub(1,c.type=='slider' and 23 or 27)end
-                    text(x,y,label,label_size,c.disabled and muted or (c.type=='section' and accent or white))
+                    text(x,y,label,label_size,c.disabled and muted or (c==selected and selection_text or (c.type=='section' and accent or white)))
                     if c.type~='text' and c.type~='section' then
                         local value=(mod.handle.preview or mod.handle.get)(c.id);local control=c;local owner=mod
                         local function select()self.row=row_index;self.focus='settings'end
@@ -414,8 +414,8 @@ function M.new(api)
             rect(x-2,top-height-2,254,height+4,accent);rect(x,top-height,250,height,{24,30,35})
             for index=d.scroll+1,math.min(#d.control.choices,d.scroll+count)do
                 local y=top-29-(index-d.scroll-1)*31;local choice=index
-                if index==d.selected then rect(x+3,y-4,234,30,{62,70,77})end
-                text(x+8,y,tostring(d.control.choices[index]):sub(1,23),18,index==d.selected and accent or white)
+                if index==d.selected then rect(x+3,y-4,234,30,accent)end
+                text(x+8,y,tostring(d.control.choices[index]):sub(1,23),18,index==d.selected and selection_text or white)
                 hit(x+3,y-4,234,30,function()
                     local ok,err=(d.mod.handle.edit or d.mod.handle.set)(d.control.id,choice)
                     self.notice=ok and (d.control.page and d.control.page.require_confirmation and 'Pending confirmation' or 'Saved') or tostring(err);self.dropdown=nil
