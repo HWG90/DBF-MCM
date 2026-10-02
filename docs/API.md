@@ -103,3 +103,15 @@ Every saved control must declare `default` in its definition: booleans for toggl
 ```
 
 `handle.get_default('opacity')` returns the normalized creator default. `handle.reset('opacity')` saves that default and runs the change callback. Valid saved user settings take precedence; missing or invalid saved settings use the default. Updating a default does not overwrite an existing valid user setting.
+
+## Editable text
+Use `input` for editable single-line values; `text` remains a read-only label.
+
+```lua
+{id='preset_name', type='input', label='Preset name', default='My preset',
+ max_length=80,
+ validate=function(value) return #value>0, 'Enter a name' end,
+ on_change=function(value) selected_name=value end}
+```
+
+Defaults and saved values are strings. `max_length` is a byte limit (default 256, maximum 4096). Optional `validate(value)` returns true to accept, or false plus an error message. Enter, Tab, or clicking away validates and saves; invalid input remains active. Escape cancels. Confirmation pages stage text like other settings. Shift punctuation, ASCII letters, numbers, spaces, Backspace, Delete and Ctrl+A are supported. This first version uses US keyboard mapping; clipboard paste, IME and caret selection are not implemented. Strings are escaped in settings files and never executed. A filename field only passes text to your callback: authors must validate paths and perform file operations themselves.

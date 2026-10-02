@@ -21,6 +21,12 @@ function M.rgb_hsv(rgb)
  return h,hi==0 and 0 or delta/hi,hi
 end
 local function normalize(c,v)
+    if c.type=='input' then
+        assert(type(v)=='string' and not v:find('[%c]'),'Expected single-line text')
+        assert(#v<=(c.max_length or 256),'Text exceeds maximum length')
+        if c.validate then local ok,why=c.validate(v);assert(ok,why or 'Invalid text')end
+        return v
+    end
     if c.type=='color' then return M.color_hex(v)end
     if c.type=='toggle' then assert(type(v)=='boolean','Expected boolean');return v end
     assert(type(v)=='number' and v==v and math.abs(v)<1e12,'Expected finite number')
@@ -32,9 +38,9 @@ local function normalize(c,v)
     if c.type=='keybind' then assert(v%1==0 and v>=0 and v<=255,'Invalid virtual key');return v end
     error('Control has no stored value')
 end
-local function stored(c)return c.type=='toggle' or c.type=='slider' or c.type=='choice' or c.type=='keybind' or c.type=='color'end
+local function stored(c)return c.type=='input' or c.type=='toggle' or c.type=='slider' or c.type=='choice' or c.type=='keybind' or c.type=='color'end
 function M.new(store,log)
-    local api={api=1,version='0.1.24',color_hex=M.color_hex,color_rgb=M.color_rgb,hsv_rgb=M.hsv_rgb,rgb_hsv=M.rgb_hsv,mods={},revision=0};log=log or function()end
+    local api={api=1,version='0.1.26',color_hex=M.color_hex,color_rgb=M.color_rgb,hsv_rgb=M.hsv_rgb,rgb_hsv=M.rgb_hsv,mods={},revision=0};log=log or function()end
     local palette=store and store.load('mcm_custom_palette') or {};local swatches={}
     for i=1,12 do local ok,v=pcall(M.color_hex,palette['swatch_'..i]);if ok then swatches[#swatches+1]=v end end
     function api.swatches()return copy(swatches)end
@@ -75,7 +81,11 @@ function M.new(store,log)
             local page={category=definition.category,id=definition.id,name=plain(definition.name),controls={},require_confirmation=definition.require_confirmation==true,pending={},actions={}}
             for _,definition_control in ipairs(definition.controls or {})do
                 local c=copy(definition_control);c.page=page;plain(c.label or '');plain(c.description or '')
-                assert(({color=true,toggle=true,slider=true,choice=true,keybind=true,button=true,text=true,section=true})[c.type],'Unsupported control')
+                assert(({input=true,color=true,toggle=true,slider=true,choice=true,keybind=true,button=true,text=true,section=true})[c.type],'Unsupported control')
+                if c.type=='input' then
+                    assert(c.max_length==nil or (type(c.max_length)=='number' and c.max_length%1==0 and c.max_length>=1 and c.max_length<=4096),'Invalid maximum length')
+                    assert(c.validate==nil or type(c.validate)=='function','Invalid text validator')
+                end
                 assert(c.column==nil or c.column==1 or c.column==2,'Column must be 1 or 2')
                 if c.type~='text' and c.type~='section' then
                     id(c.id);assert(not mod.controls[c.id],'Duplicate control ID');mod.controls[c.id]=c

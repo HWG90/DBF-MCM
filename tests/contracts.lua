@@ -340,4 +340,18 @@ test('creator defaults remain available after edits and reset restores them',fun
  assert(h.get('slider')==8 and h.get_default('slider')==5)
  assert(h.reset('slider'));assert(h.get('slider')==5)
 end)
+test('text input preserves strings validates and commits on blur',function()
+ local store=assert(loadfile('src/store.lua'))().new('tests/tmp')
+ assert(store.save('text_roundtrip',{name='true',empty='',path='C:\\a=b%20.ini'}))
+ local saved=store.load('text_roundtrip');assert(saved.name=='true' and saved.empty=='' and saved.path=='C:\\a=b%20.ini')
+ local api=core.new();local changed
+ local h=api.register({id='input_test',name='Input',pages={{id='p',name='Page',controls={{id='name',type='input',label='Name',default='Preset',max_length=8,on_change=function(v)changed=v end}}}}})
+ assert(not pcall(h.set,'name','123456789'));assert(not pcall(h.set,'name','a\nb'))
+ local m=menu_module.new(api);m.visible=true;m.compose(1920,1080)
+ m.text_edit={mod=api.mods.input_test,control=api.mods.input_test.controls.name,text='Preset',replace=true}
+ m.key(65,false,true);m.key(66,false,false);m.key(189,false,true)
+ assert(m.text_edit.text=='Ab_');assert(m.finish_input());assert(h.get('name')=='Ab_' and changed=='Ab_')
+ m.text_edit={mod=api.mods.input_test,control=api.mods.input_test.controls.name,text='cancel',replace=false}
+ m.key(27);assert(h.get('name')=='Ab_' and not m.text_edit)
+end)
 print(count..' meaningful contract tests passed; native rendering/input remain unverified')
