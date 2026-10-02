@@ -3,19 +3,20 @@ local M={}
 function M.new(sr,preview_only)
     local gui,world;local ids={};local G=sr.Gui;local self={}
     local preview_view=not preview_only and M.new(sr,true) or nil
+    local popup_view=not preview_only and M.new(sr,true) or nil
     local function live()for _,w in pairs(sr.Application.worlds() or {})do if w==world then return true end end;return false end
     function self.clear()
         if gui and live()then for _,item in ipairs(ids)do pcall(G['destroy_'..item.type],gui,item.id)end end;ids={}
     end
-    function self.release()if preview_view then preview_view.release()end;if gui and live()then self.clear();sr.World.destroy_gui(world,gui)end;gui,world=nil,nil end
+    function self.release()if preview_view then preview_view.release()end;if popup_view then popup_view.release()end;if gui and live()then self.clear();sr.World.destroy_gui(world,gui)end;gui,world=nil,nil end
     function self.draw(commands)
         if preview_view then
-            local menu,preview={},{}
+            local menu,preview,popup={},{},{}
             for _,c in ipairs(commands)do
-                local destination=c.hud_preview and preview or menu
+                local destination=c.hud_preview and preview or (c.popup and popup or menu)
                 destination[#destination+1]=c
             end
-            preview_view.draw(preview);commands=menu
+            preview_view.draw(preview);popup_view.draw(popup);commands=menu
         end
         if #commands==0 then self.release();return end
         if gui and not live()then gui,world=nil,nil;ids={}end
