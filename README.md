@@ -2,6 +2,8 @@
 
 # Mod Configuration Menu — development preview
 
+**Required: MDL API 2 and Bingus Shared Loader. MCM does not currently support standalone installation without MDL.**
+
 An independent Helldivers 2 configuration framework inspired by the original Skyrim/SkyUI and Fallout 4 MCM. The provisional project name is local; nothing has been published.
 
 The UI has a scrolling mod list on the left, subpages below it, one or two columns of settings on the right, and contextual help and control hints below. Mod registrations are not truncated to eight. It uses stock Stingray GUI/font resources and runs through MDL API 2 without replacing the game's global update callback.
