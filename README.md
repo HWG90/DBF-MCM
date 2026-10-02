@@ -2,11 +2,13 @@
 
 # Mod Configuration Menu — development preview
 
-**Required: MDL API 2 and Bingus Shared Loader. MCM does not currently support standalone installation without MDL. Bingus Mod Options Menu is not required and can be disabled.**
+**Required: Bingus Shared Loader. Choose the Shared Loader standalone preview (no MDL requirement), or the MDL variant (MDL API 2 required for live reload). Run only one MCM instance. Bingus Mod Options Menu is optional and can be disabled.**
 
-An independent Helldivers 2 configuration framework inspired by the original Skyrim/SkyUI and Fallout 4 MCM. The provisional project name is local; nothing has been published.
+The standalone variant is newly packaged and still requires live installation validation. See [Standalone installation](docs/INSTALL-STANDALONE.md).
 
-The UI has a scrolling mod list on the left, subpages below it, one or two columns of settings on the right, and contextual help and control hints below. Mod registrations are not truncated to eight. It uses stock Stingray GUI/font resources and runs through MDL API 2 without replacing the game's global update callback.
+An independent Helldivers 2 configuration framework inspired by the original Skyrim/SkyUI and Fallout 4 MCM. Public prerelease builds are available; remaining live-test limitations are documented.
+
+The UI has a scrolling mod list on the left, subpages below it, one or two columns of settings on the right, and contextual help and control hints below. Mod registrations are not truncated to eight. It uses stock Stingray GUI/font resources and uses either an optional MDL adapter or a Shared Loader startup adapter. The startup adapter chains the game update and shutdown callbacks.
 
 ## Current delivery
 
