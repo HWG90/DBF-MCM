@@ -1,4 +1,4 @@
-local api,menu,view,registered,input,log,capture;local legacy;local binding_host;local held_toggle=false;local retired=false
+local api,menu,view,registered,input,log,capture;local legacy;local diagnostic;local binding_host;local held_toggle=false;local retired=false
 local function close()
     if legacy then legacy.release();legacy=nil end
     retired=true;if registered then registered.unregister();registered=nil end
@@ -8,7 +8,7 @@ local function close()
     api,menu,input=nil,nil,nil;binding_host=nil;held_toggle=false
 end
 return {
-    name='Mod Configuration Menu (Preview)',version='0.1.24',author='Local development',
+    name='Mod Configuration Menu (Preview)',version='0.1.25',author='Local development',
     description='Independent MCM-style author framework. F10 opens a keyboard/mouse preview. Not yet a native pause-menu replacement.',
     on_enable=function(ctx)
         assert(ctx.api==2 and type(ctx.global)=='function' and type(ctx.on_cleanup)=='function','MDL API 2 required')
@@ -39,7 +39,13 @@ return {
         local native=ffi.load(ctx.dir..'/'..native_name)
         capture=MCM.capture.new(native,assert(sr.Window,'Window API unavailable'),ctx.log)
         local folder=assert(os.getenv('LOCALAPPDATA'),'LOCALAPPDATA unavailable')..'/MDL/Helldivers2/Mods/dbf_mcm/settings'
-        api=MCM.core.new(MCM.store.new(folder),ctx.log);menu=MCM.menu.new(api);view=MCM.view.new(sr)
+        local storage=MCM.store.new(folder)
+        if not rawget(_G,'ModOptionsMenu') then
+            local compat,registry=MCM.compat.new(storage,rawget(_G,'DBFMCMCompatRegistry'))
+            rawset(_G,'DBFMCMCompatRegistry',registry) -- Survives menu reload; client mods keep their registrations.
+            ctx.global('ModOptionsMenu',compat);ctx.log('MCM provides ModOptionsMenu API 1 compatibility')
+        end
+        api=MCM.core.new(storage,ctx.log);menu=MCM.menu.new(api);view=MCM.view.new(sr)
         input={}
         local foreground
         function input.down(code)return foreground and bit.band(tonumber(user.dbfmcm_key(code)),0x8000)~=0 or false end
@@ -81,6 +87,12 @@ return {
         local ok,err=pcall(function()
             input.poll()
             legacy.poll(rawget(_G,'ModOptionsMenu'))
+            local report=legacy.diagnostic()
+            if report~=diagnostic then
+                diagnostic=report;ctx.log('Legacy registry: '..report)
+                local f=io.open(os.getenv('LOCALAPPDATA')..'/MDL/Helldivers2/Logs/MCM-diagnostic.log','w')
+                if f then f:write(report,'\n');f:close()end
+            end
             -- Native binding action aliases can collide with game menu navigation.
             -- Use the physical F10 edge until an independent action is verified.
             menu.tick(input)

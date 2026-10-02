@@ -328,5 +328,45 @@ test('window close buttons close only their own window',function()
  m.tick(input);assert(not m.color_picker and m.visible)
  down=false;m.tick(input);m.compose(1920,1080);px=1670;py=920;down=true;m.tick(input);assert(not m.visible)
 end)
+test('compatibility API works without original menu and preserves callback semantics',function()
+ local compat=assert(loadfile('src/compat.lua'))();local core=assert(loadfile('src/core.lua'))();local legacy=assert(loadfile('src/legacy.lua'))()
+ local saved={};local store={load=function()return saved end,save=function(_,v)saved=v;return true end}
+ local host=compat.new(store);local calls=0
+ assert(host.api==1 and host.ready())
+ assert(host.register_option('example.enabled',{type='toggle',mod='Example',label='Enabled',default=false}))
+ assert(host.register_option('example.rate',{type='slider',mod='Example',label='Rate',min=0,max=10,step=2,default=4}))
+ assert(host.register_option('example.mode',{type='choice',mod='Example',label=function()return 'Mode' end,choices={'A','B'},default=1}))
+ assert(host.on_change('example.enabled',function(v,id)assert(type(v)=='boolean' and id=='example.enabled');calls=calls+1 end))
+ assert(host.set('example.enabled',true) and calls==0)
+ assert(host.set('example.rate',5) and host.get('example.rate')==6)
+ assert(not host.set('example.mode',3))
+ assert(not host.register_option('example.rate',{type='toggle',label='Different'}))
+ local api=core.new(nil,function()end);local importer=legacy.new(api,function()end,core);importer.poll(host)
+ local mod=api.list()[1];assert(mod and #mod.pages[1].controls==3)
+ local id;for _,c in ipairs(mod.pages[1].controls)do if c.label=='Enabled'then id=c.id end end
+ assert(mod.handle.set(id,false));calls=0;assert(mod.handle.set(id,true) and calls==1)
+ local restored=compat.new(store);assert(restored.register_option('example.enabled',{type='toggle',label='Enabled'}));assert(restored.get('example.enabled'))
+end)
+test('moving retained menu primitives destroys stale IDs before replacements',function()
+ local module=assert(loadfile('src/view.lua'))();local world={};local living={};local next_id=0;local started=false
+ local sr={Application={worlds=function()return {world}end,main_world=function()return world end},World={create_screen_gui=function()return {}end,destroy_gui=function()end},Vector2=function(...)return {...}end,Vector3=function(...)return {...}end,Color=function(...)return {...}end,Gui={}}
+ local free={};local function draw()started=true;local id=table.remove(free);if not id then next_id=next_id+1;id=next_id end;living[id]=true;return id end
+ local function destroy(_,id)assert(not started,'Stale destroy followed an allocation');living[id]=nil;free[#free+1]=id end
+ sr.Gui.rect=draw;sr.Gui.text=draw;sr.Gui.destroy_rect=destroy;sr.Gui.destroy_text=destroy
+ local v=module.new(sr);local commands={{type='rect',x=0,y=0,w=10,h=10,c={0,0,0},a=1},{type='text',x=0,y=0,text='Label',size=18,c={255,255,255},a=1}}
+ v.draw(commands);started=false;commands[1].x=20;commands[2].x=20;v.draw(commands)
+ local n=0;for _ in pairs(living)do n=n+1 end;assert(n==2)
+end)
+test('compatibility registrations and callbacks survive menu reload',function()
+ local compat=assert(loadfile('src/compat.lua'))();local old,state=compat.new(nil);local called=0
+ assert(old.register_option('shallow.depth',{type='slider',mod='Shallow water diving',label='Depth',min=0,max=10,default=4}))
+ old.on_change('shallow.depth',function()called=called+1 end)
+ local replacement=compat.new(nil,state);assert(replacement.get('shallow.depth')==4)
+ assert(old.set('shallow.depth',6) and replacement.get('shallow.depth')==6)
+ local core=assert(loadfile('src/core.lua'))();local api=core.new(nil,function()end)
+ local importer=assert(loadfile('src/legacy.lua'))().new(api,function()end,core);importer.poll(replacement)
+ local mod=api.list()[1];assert(mod and mod.name=='SHALLOW WATER DIVING')
+ assert(mod.handle.set(mod.pages[1].controls[1].id,8));assert(called==1 and old.get('shallow.depth')==8)
+end)
 assert(loadfile('src/adapter.lua'));assert(loadfile('dist/dbf_mcm/mod.lua'))
 print(count..' meaningful contract tests passed; native rendering/input remain unverified')

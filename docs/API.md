@@ -1,4 +1,4 @@
-# Author API 1 — preview contract
+# Author API 1 â€” preview contract
 
 Wait for `_G.DBFMCM` in your update, then register once. Re-register if its identity changes after a framework reload. Unregister your handle on disable. Do not copy framework source into every mod.
 
@@ -29,7 +29,7 @@ IDs use letters, numbers, underscore and hyphen, up to 80 bytes. Mod IDs must be
 | toggle | id, label, default | boolean |
 | slider | id, label, min, max, step, default | finite, bounded, snapped number |
 | choice | id, label, choices, default | 1-based index |
-| keybind | id, label, default | Windows virtual-key code 0–255; 0 unbound |
+| keybind | id, label, default | Windows virtual-key code 0â€“255; 0 unbound |
 | button | id, label, on_activate | none |
 | section/text | label | none |
 
@@ -90,3 +90,7 @@ The compatibility adapter explicitly groups DBF-HUD Layout Editor and DBF-HUD Pl
 The picker also offers a draggable hue/saturation spectrum and brightness strip. SAVE SWATCH stores the current preview in a shared persistent palette (12 most recent unique colors). `DBFMCM.save_swatch(value)` returns success/error; `DBFMCM.swatches()` returns canonical HEX strings. Palette persistence is independent of the edited mod and does not apply its color setting.
 
 Select a custom swatch (outlined in yellow), edit its color, then click REPLACE to overwrite that slot. SAVE SWATCH still adds a color. `DBFMCM.replace_swatch(index, value)` overwrites an existing 1-based slot and returns success/error; failed writes leave the palette unchanged.
+
+## ModOptionsMenu compatibility
+
+When the original menu is absent, MCM provides API 1 register_option/get/set/on_change/ready for toggles, choices and sliders. Its shared registry survives MCM reloads. Legacy registration limits are expanded. Translation functions resolve at registration; full dynamic translation parity is not yet verified. Existing original-menu settings are not automatically migrated. Test each mod live. Restart the game if registrations were already lost before the preservation fix.

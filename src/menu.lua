@@ -380,7 +380,7 @@ function M.new(api)
             if type(page.render_preview)=='function' then
                 local ok,preview=pcall(page.render_preview,{x=ox+950*s,y=oy+285*s,w=460*s,h=350*s,scale=s})
                 if ok and type(preview)=='table' then
-                    for _,command in ipairs(preview)do command.layer=110;commands[#commands+1]=command end
+                    for _,command in ipairs(preview)do command.layer=110;command.hud_preview=true;commands[#commands+1]=command end
                 end
             end
             local help=selected and selected.description or mod.description

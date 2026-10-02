@@ -9,6 +9,12 @@ end
 function M.new(api,log,core)
  local self={};local owner,registry;local imported={};local revision=-1;local appearance_seen
  local function clear()if appearance_seen then appearance_seen.hidden=nil end;for _,id in ipairs(imported)do api.mods[id]=nil end;imported={};api.revision=api.revision+1 end
+ function self.diagnostic()
+  local names={};for name in pairs(registry and registry.mods or {})do names[#names+1]=name end;table.sort(names)
+  local registered=0;for _ in pairs(registry and registry.options or {})do registered=registered+1 end
+  local visible=0;for _,mod in pairs(api.mods)do if not mod.hidden then visible=visible+1 end end
+  return 'host='..tostring(owner~=nil)..' compat='..tostring(owner and owner.mcm_compat==true)..' registry='..tostring(registry~=nil)..' options='..registered..' visible='..visible..' groups='..table.concat(names,', ')
+ end
  function self.release()clear();owner=nil;registry=nil end
  function self.poll(host)
   if host~=owner then clear();owner=host;registry=state_of(host);revision=-1 end
@@ -19,6 +25,8 @@ function M.new(api,log,core)
   clear();revision=registry.revision
   local names={};for name in pairs(registry.mods)do names[#names+1]=name end;table.sort(names)
   for index,name in ipairs(names)do
+   local direct_hud=appearance and appearance.name=='DBF-HUD'
+   if not (direct_hud and (name=='DBF-HUD' or name=='DBF-HUD PLACEMENT' or name=='DBF-HUD LAYOUT EDITOR')) then
    local source=registry.mods[name];local controls={};local links={};local pending={}
    for n,o in ipairs(source.order or {})do
     if (o.kind=='toggle' or o.kind=='slider' or o.kind=='choice') and not (name=='DBF-HUD' and appearance) then
@@ -46,6 +54,7 @@ function M.new(api,log,core)
     api.mods[id]=mod;imported[#imported+1]=id
    end
   end
+   end
   -- Explicit compatibility grouping; original Bingus registration IDs remain intact.
   local root,children
   children={}
