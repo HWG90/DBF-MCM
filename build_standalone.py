@@ -13,8 +13,8 @@ entry=ROOT/'dist/dbf_mcm_startup.lua';entry.write_text(source,encoding='utf-8')
 dll=ctypes.CDLL(r'C:\Program Files (x86)\Steam\steamapps\common\Helldivers 2\bin\lua51.dll');dll.luaL_newstate.restype=ctypes.c_void_p;state=dll.luaL_newstate();dll.luaL_loadfile.argtypes=[ctypes.c_void_p,ctypes.c_char_p];dll.lua_close.argtypes=[ctypes.c_void_p]
 try:assert dll.luaL_loadfile(state,str(entry).encode())==0,'Startup Lua compilation failed'
 finally:dll.lua_close(state)
-output=ROOT/'dist/DBF-MCM-Standalone-0.1.49.zip'
-builder.build_addon('mods/dbf_mcm/startup',source.encode(),'e9c84b37-7a48-42ad-9a72-3a43f06b96e1',output,display_name='DBF-MCM Standalone 0.1.49')
+output=ROOT/'dist/DBF-MCM-Standalone-0.1.50.zip'
+builder.build_addon('mods/dbf_mcm/startup',source.encode(),'e9c84b37-7a48-42ad-9a72-3a43f06b96e1',output,display_name='DBF-MCM Standalone 0.1.50')
 with zipfile.ZipFile(output,'a',zipfile.ZIP_DEFLATED) as z:
  z.write(ROOT/'README.md','README.md');z.write(ROOT/'docs/INSTALL-STANDALONE.md','INSTALL.md');z.write(ROOT/'src/startup.lua','Source/startup.lua');z.write(ROOT/'build_standalone.py','Source/build_standalone.py')
 with zipfile.ZipFile(output) as z:assert z.testzip() is None;assert len(z.namelist())==len(set(z.namelist()))

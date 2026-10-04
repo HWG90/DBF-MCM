@@ -1,4 +1,4 @@
-# Preview checkpoint: 0.1.49
+# Preview checkpoint: 0.1.50
 
 This checkpoint synchronizes the installed MCM authoring/grouping framework, immediate controls, preview popout, text retention, input restoration and optional legacy compatibility. Shared Loader and MDL startup adapters remain separate; run one instance. Bingus Mod Options is optional.
 

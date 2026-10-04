@@ -17,7 +17,7 @@ local function close()
     api,menu,input=nil,nil,nil;binding_host=nil;held_toggle=false
 end
 return {
-    name='Mod Configuration Menu (Preview)',version='0.1.49',author='Local development',
+    name='Mod Configuration Menu (Preview)',version='0.1.50',author='Local development',
     description='Independent MCM-style author framework. F10 opens a keyboard/mouse preview. Not yet a native pause-menu replacement.',
     on_enable=function(ctx)
         assert(ctx.api==2 and type(ctx.global)=='function' and type(ctx.on_cleanup)=='function','MDL API 2 required')

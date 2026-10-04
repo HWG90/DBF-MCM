@@ -2,6 +2,8 @@
 
 # DBF-MCM
 
+Current preview: **0.1.50**. See the [new versioned prerelease](https://github.com/HWG90/DBF-MCM/releases/tag/mcm-v0.1.50-preview.1).
+
 **Diver's Best Friend — Mod Configuration Menu**
 
 A reusable in-game configuration framework for Helldivers 2 mod creators.
