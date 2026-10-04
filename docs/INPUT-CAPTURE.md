@@ -15,3 +15,23 @@ Live check: open with F10 after releasing mouse buttons. Move and click the curs
 ## Build
 
 Run `python native/build.py` with Visual Studio 2022 C++ tools installed, then `python build.py --install`. The installer copies the helper and manifest before atomically replacing the Lua entry point. Existing settings remain intact. Native source is included for inspection.
+
+## Restoration failures and loader handoff
+
+Cursor restoration treats setter exceptions and explicit `false` returns as failures. The menu releases its native gate but retains the exact cursor snapshot until every setter succeeds. Closed-menu updates retry restoration; acquisition is refused while a previous restore remains pending. Foreign input leases remain owned by their token and cannot be released by ordinary menu close.
+
+`DBFMCM.close()` returns `true` on successful restoration or `false, reason` when ownership/restoration prevents it. `DBFMCM.input_status()` reports `owner`, `active`, and `pending_restore` without acquiring capture. Shutdown retains the provider when restoration is pending so deferred cleanup can retry.
+
+A matching Live Lua Loader must expose `close_manager()` with the same success/failure convention. Before MCM acquires capture, it closes the independent loader manager and only then snapshots game cursor flags. The loader must likewise respect a failed MCM close before opening its manager. MCM refuses opening with an older loader that exposes `open_manager()` but lacks `close_manager()`; deploy matched implementations together. This prevents recording another menu's released mouse focus as the game baseline.
+
+Focused offline checks:
+
+```powershell
+python tests/run.py --suite tests/capture_recovery.lua
+# Set this to your matching LLL source checkout for the integration checks.
+$env:DBF_LLL_ROOT = 'C:/path/to/LLL'
+python tests/run.py --suite tests/handoff_recovery.lua
+python tests/run.py --suite tests/manager_handoff.lua
+```
+
+These checks cover refused setters, exceptions for all three cursor flags, retry without reacquisition, focus loss, foreign leases, ordered handoff, and actual loader-manager close failure propagation. They do not prove live-game behavior of the permanent candidate. Repeat the live checks above with both repaired components installed before treating the handoff as validated.

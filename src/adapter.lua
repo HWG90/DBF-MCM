@@ -74,11 +74,14 @@ return {
             if token==nil then return false,'Lease token required'end
             return capture.release(token)
         end}
+        function api.input_status()return capture and capture.status() or {active=false}end
         function api.open()menu.visible=true end
         function api.close()
             menu.visible=false;menu.capture=false
-            if capture then capture.release()end
+            local ok,reason=true,nil
+            if capture then ok,reason=capture.release()end
             if view then view.release()end
+            return ok,reason
         end
         function api.is_open()return menu.visible end
         ctx.global('DBFMCM',api)
@@ -103,6 +106,14 @@ return {
             menu.tick(input)
             if retired or not menu then return end
             if menu.visible and not input.focused()then menu.visible=false;menu.capture=false end
+            -- Release the manager before snapshotting game cursor flags.
+            local loader=rawget(_G,'LiveLuaLoader')
+            if menu.visible and not capture.active and loader and type(loader.close_manager)=='function' then
+                local released,why=loader.close_manager()
+                if released==false then menu.visible=false;ctx.log('MCM handoff refused: '..tostring(why))end
+            elseif menu.visible and not capture.active and loader and type(loader.open_manager)=='function' then
+                menu.visible=false;ctx.log('MCM handoff refused: loader lacks safe close_manager API')
+            end
             local acquired,reason=capture.sync(menu.visible,input.focused(),input.window())
             if not acquired then menu.visible=false;menu.capture=false;capture.release();ctx.log('Menu closed: '..tostring(reason))end
             menu.advance(dt)

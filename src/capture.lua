@@ -30,17 +30,19 @@ function M.new(native,window,log)
         -- Menu cleanup cannot alter another owner's cursor or native gate.
         if external then return false,'Input lease belongs to another owner'end
         native.mcm_release()
-        if snapshot then
-            pcall(window.set_mouse_focus,snapshot.focus)
-            pcall(window.set_show_cursor,snapshot.cursor)
-            pcall(window.set_clip_cursor,snapshot.clip)
-            snapshot=nil
-        end
         self.active=false
+        local ok,reason=restore(snapshot)
+        if not ok then log('Menu cursor restoration pending: '..tostring(reason));return false,reason end
+        if snapshot then log('Menu cursor snapshot restored')end
+        snapshot=nil;return true
+    end
+    function self.status()
+        return {owner=external and external.owner or (self.active and 'mcm' or (snapshot and 'mcm_restore' or nil)),active=self.active,pending_restore=snapshot~=nil and not self.active}
     end
     function self.sync(visible,focused,hwnd)
         if visible and external then return false,'Input lease belongs to '..external.owner end
-        if not visible or not focused then if self.active or snapshot then self.release()end;return true end
+        if not visible or not focused then if self.active or snapshot then return self.release()end;return true end
+        if snapshot and not self.active then return false,'Previous cursor restoration pending'end
         if not self.active then
             for _,name in ipairs({'mouse_focus','show_cursor','clip_cursor','set_mouse_focus','set_show_cursor','set_clip_cursor'})do
                 if type(window[name])~='function' then return false,'Missing cursor API: '..name end
@@ -62,7 +64,7 @@ function M.new(native,window,log)
     end
     function self.shutdown()
         if external then local ok,reason=self.release(external.token);if not ok then return false,reason end end
-        self.release();return true
+        return self.release()
     end
     return self
 end
