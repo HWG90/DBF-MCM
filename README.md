@@ -1,6 +1,12 @@
 ![Diver's Best Friend - Mod Configuration Menu](assets/branding/banner.png)
 
-# Mod Configuration Menu — development preview
+# DBF-MCM
+
+**Diver's Best Friend — Mod Configuration Menu**
+
+A reusable in-game configuration framework for Helldivers 2 mod creators.
+
+[Downloads](https://github.com/HWG90/DBF-MCM/releases) | [Installation](docs/INSTALL-STANDALONE.md) | [Creator API](docs/API.md) | [Example menu](examples/example.lua) | [Report an issue](https://github.com/HWG90/DBF-MCM/issues)
 
 **Required: Bingus Shared Loader. Choose the Shared Loader standalone preview (no MDL requirement), or the MDL variant (MDL API 2 required for live reload). Run only one MCM instance. Bingus Mod Options Menu is optional and can be disabled.**
 
@@ -56,3 +62,11 @@ Choice controls open dropdown lists. Scroll the wheel inside an open dropdown, u
 
 Click a slider value box to type a number. The first character replaces the old value; Ctrl+A selects it, Backspace/Delete remove text. Enter validates the range and configured step before committing; Escape or clicking elsewhere cancels. Confirmation pages keep valid edits pending.
 
+
+## Project branding
+
+<p align="center">
+  <img src="assets/branding/logo.png" width="320" alt="DBF-MCM — Diver's Best Friend, Mod Configuration Menu">
+</p>
+
+[Compact logo](assets/branding/logo.png) | [Wide banner](assets/branding/banner.png) | [Branding guide](assets/branding/BRANDING.md)
