@@ -80,8 +80,8 @@ function M.new(sr,preview_only,diagnostic_log)
                     sr.Material.set_scalar(handle,'threshold_fade',0)
                     if c.preview_mapping then
                         local r=c.preview_mapping
-                        sr.Material.set_vector4(handle,'scissor_rect',sr.Vector4(r[1],r[2],r[3],0))
-                        sr.Material.set_vector4(handle,'atlas_scissor',sr.Vector4(r[4],r[5],r[6],0))
+                        sr.Material.set_vector4(handle,'scissor_rect',sr.Vector4(r[1],r[2],r[3],c.preview_time or 0))
+                        sr.Material.set_vector4(handle,'atlas_scissor',sr.Vector4(r[4],r[5],r[6],c.preview_animation or 0))
                         sr.Material.set_vector4(handle,'clip_box',sr.Vector4(r[7],r[8],r[9],0))
                     end
                     uniforms[uniform_key]=true

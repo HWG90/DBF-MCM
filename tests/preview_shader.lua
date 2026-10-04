@@ -10,8 +10,8 @@ sr.Vector3=function(...)return {...}end;sr.Vector2=sr.Vector3;sr.Vector4=sr.Vect
 local view=MCM.view.new(sr,true);local commands={}
 for i,role in ipairs({'main_panel','main_effect','child_panel','child_effect'})do commands[i]={type='rect',x=i*20,y=10,w=15,h=10,c={48,48,48},a=.8,preview_role=role,preview_material='mods/dbf_hud/materials/mapped_warning_hatch',preview_mapping={i,0,0,0,i,0,0,0,1}}end
 view.draw(commands);assert(next_gui==5 and allocations==8 and updates==12)
-for i,c in ipairs(commands)do c.preview_mapping[1]=i*2 end
+for i,c in ipairs(commands)do c.preview_mapping[1]=i*2;c.preview_time=7;c.preview_animation=1 end
 view.draw(commands);assert(allocations==8 and updates==24)
-for _,materials in pairs(handles)do local h=materials['mods/dbf_hud/materials/mapped_warning_hatch'];if h then assert(h.clip_box[3]==1 and h.scissor_rect[1]%2==0)end end
+for _,materials in pairs(handles)do local h=materials['mods/dbf_hud/materials/mapped_warning_hatch'];if h then assert(h.clip_box[3]==1 and h.scissor_rect[1]%2==0 and h.scissor_rect[4]==7 and h.atlas_scissor[4]==1)end end
 view.release();assert(destroyed==5)
 print('PASS same-shader role isolation, retained uniform updates, and complete preview GUI cleanup')
