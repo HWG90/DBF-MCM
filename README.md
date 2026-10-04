@@ -8,7 +8,7 @@ A reusable in-game configuration framework for Helldivers 2 mod creators.
 
 [Downloads](https://github.com/HWG90/DBF-MCM/releases) | [Installation](docs/INSTALL-STANDALONE.md) | [Creator API](docs/API.md) | [Example menu](examples/example.lua) | [Report an issue](https://github.com/HWG90/DBF-MCM/issues)
 
-**Required: Bingus Shared Loader. Choose the Shared Loader standalone preview (no MDL requirement), or the MDL variant (MDL API 2 required for live reload). Run only one MCM instance. Bingus Mod Options Menu is optional and can be disabled.**
+**Choose one loading path:** [Live Lua Loader (LLL)](https://github.com/HWG90/LLL) with the loose Preview package, Bingus Shared Loader with the Standalone package, or MDL API 2 with the loose Preview package. Run only one MCM instance and one startup/shared loader. Bingus Mod Options Menu is optional.
 
 The standalone variant is newly packaged and still requires live installation validation. See [Standalone installation](docs/INSTALL-STANDALONE.md).
 
@@ -23,6 +23,12 @@ This is a first executable preview, **not a finished MCM equivalent**. The regis
 Implemented: toggle, slider, choice, key binding capture, action button, section, text; named pages; optional two-column placement; descriptions; disabled controls; default restoration; per-mod persisted values; callback isolation; late registration and unregister/reload lifecycle; mouse click selection and keyboard navigation.
 
 Not yet implemented: native Escape-menu entry, controller navigation, dynamic visibility conditions, dependency/version messaging, JSON menu loading, localization, whole-page defaults, and full compatibility with every native ModOptionsMenu consumer. Existing mods register through a compatibility adapter; their original mod packages remain installed.
+
+## Use with Live Lua Loader (LLL)
+
+MCM can also be loaded by [Live Lua Loader](https://github.com/HWG90/LLL). Follow LLL's [R18 migration and lifecycle guide](https://github.com/HWG90/LLL/blob/main/docs/MOD-MIGRATION.md) and use the **ModConfigurationMenu-Preview** ZIP, not the Standalone archive. Extract its `dbf_mcm` folder into `%LOCALAPPDATA%/LLL/Helldivers2/Mods` with `mod.lua`, `library.txt` and the named native DLL together. MDL is not required for LLL's supported context adapter.
+
+Disable/remove the previous MCM startup provider before switching; do not keep a second enabled MCM copy in a scanned MDL/Bingus folder. LLL can reload Lua, but native DLL changes need a normal restart and compiled game assets still need mod-manager deployment. MCM's own values retain their existing Local AppData settings path. See [installation details](docs/INSTALL-STANDALONE.md) for requirements and validation limits. This path is supported by the published adapter and existing session loading; a clean install of the exact 0.1.49/LLL R18 combination remains unverified.
 
 ## Install with Bingus Shared Loader
 
