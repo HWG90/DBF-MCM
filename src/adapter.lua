@@ -1,18 +1,23 @@
 local api,menu,view,registered,input,log,capture;local legacy;local diagnostic;local binding_host;local held_toggle=false;local retired=false
 local function close()
+    -- A failed external restore must keep its provider and snapshot available.
+    if capture then
+        local ok,reason=(capture.shutdown or capture.release)()
+        if ok==false then if log then log('MCM cursor restoration pending: '..tostring(reason))end;return false,reason end
+        capture=nil
+    end
     if legacy then
         -- Capture the active provider before MDL unwinds its registered globals.
         legacy.poll(rawget(_G,'ModOptionsMenu'))
         legacy.release();legacy=nil
     end
     retired=true;if registered then registered.unregister();registered=nil end
-    if capture then capture.release();capture=nil end
     if view then view.release();view=nil end
     if api and rawget(_G,'DBFMCM')==api then rawset(_G,'DBFMCM',nil)end
     api,menu,input=nil,nil,nil;binding_host=nil;held_toggle=false
 end
 return {
-    name='Mod Configuration Menu (Preview)',version='0.1.25',author='Local development',
+    name='Mod Configuration Menu (Preview)',version='0.1.49',author='Local development',
     description='Independent MCM-style author framework. F10 opens a keyboard/mouse preview. Not yet a native pause-menu replacement.',
     on_enable=function(ctx)
         assert(ctx.api==2 and type(ctx.global)=='function' and type(ctx.on_cleanup)=='function','MDL API 2 required')
@@ -49,7 +54,7 @@ return {
             package.loaded['dbf_mcm.compat_registry']=registry -- Shared storage is not an MDL-owned global.
             ctx.global('ModOptionsMenu',compat);ctx.log('MCM provides ModOptionsMenu API 1 compatibility')
         end
-        api=MCM.core.new(storage,ctx.log);menu=MCM.menu.new(api);view=MCM.view.new(sr)
+        api=MCM.core.new(storage,ctx.log,MCM.grouping);MCM.authoring.install(api);view=MCM.view.new(sr,nil,ctx.log);menu=MCM.menu.new(api,view.measure)
         input={}
         local foreground
         function input.down(code)return foreground and bit.band(tonumber(user.dbfmcm_key(code)),0x8000)~=0 or false end
@@ -65,32 +70,28 @@ return {
         function input.wheel()return tonumber(native.mcm_wheel())end
         function input.focused()return foreground~=nil end
         function input.window()return foreground end
+        api.input_lease={acquire=function(owner)return capture.acquire(owner)end,owns=function(token)return capture.owns(token)end,release=function(token)
+            if token==nil then return false,'Lease token required'end
+            return capture.release(token)
+        end}
         function api.open()menu.visible=true end
-        function api.close()menu.visible=false end
+        function api.close()
+            menu.visible=false;menu.capture=false
+            if capture then capture.release()end
+            if view then view.release()end
+        end
         function api.is_open()return menu.visible end
         ctx.global('DBFMCM',api)
         legacy=MCM.legacy.new(api,ctx.log,MCM.core)
-        registered=api.register({id='mcm',name='Mod Configuration Menu',description='Shared mod configuration framework.',pages={
-            {id='overview',name='Overview',controls={
-                {type='section',label='AUTHOR FRAMEWORK'},
-                {type='text',label='Register mods through DBFMCM.register.'},
-                {type='text',label='Mod list and pages scroll independently.'},
-                {type='text',label='Settings persist outside your savegame.'},
-                {type='text',label='Window keyboard/mouse capture while open.'}}},
-            {id='controls',name='Control showcase',controls={
-                {id='enabled',type='toggle',label='Example toggle',default=true,description='A persistent on/off setting.'},
-                {id='color',type='color',label='Example color',default='#F4CA35',description='RGB and HEX input with a preview swatch.'},
-                {id='amount',type='slider',label='Example slider',min=0,max=100,step=5,default=50,description='Left and right change the value; Home restores the default.'},
-                {id='style',type='choice',label='Example choice',choices={'Standard','Compact','Wide'},default=1,description='Click or press left/right to cycle choices.'},
-                {id='key',type='keybind',label='Example key binding',default=0,description='Select, then press a key; Escape cancels. This stores a key code; the mod handles the action.'},
-                {id='action',type='button',label='Example action',description='A callback button; not a persisted setting.',on_activate=function()ctx.log('MCM example action activated')end}}}}})
-        ctx.log('MCM preview enabled; F10 opens the menu. Existing Mod Options Menu is unchanged.')
+        registered=api.register(MCM.framework({example_action=function()ctx.log('MCM example action activated')end},MCM.authoring))
+        ctx.log('IMMEDIATE_CAPTURE_RELEASE_0148 20261004; MCM preview enabled; F10 opens the menu. Existing Mod Options Menu is unchanged.')
     end,
     on_update=function(ctx,dt)
         if retired or not api then return end
         local ok,err=pcall(function()
             input.poll()
             legacy.poll(rawget(_G,'ModOptionsMenu'))
+            api.mount('dbf_ass_blacklist',"Diver's Best Friend")
             local report=legacy.diagnostic()
             if report~=diagnostic then
                 diagnostic=report;ctx.log('Legacy registry: '..report)
@@ -100,12 +101,20 @@ return {
             -- Native binding action aliases can collide with game menu navigation.
             -- Use the physical F10 edge until an independent action is verified.
             menu.tick(input)
+            if retired or not menu then return end
             if menu.visible and not input.focused()then menu.visible=false;menu.capture=false end
             local acquired,reason=capture.sync(menu.visible,input.focused(),input.window())
             if not acquired then menu.visible=false;menu.capture=false;capture.release();ctx.log('Menu closed: '..tostring(reason))end
+            menu.advance(dt)
             local w,h=stingray.Gui.resolution();view.draw(menu.compose(w,h))
         end)
-        if not ok then ctx.log('MCM stopped after error: '..tostring(err));close()end
+        if not ok and not retired and menu then
+            ctx.log('MCM frame failed; menu closed safely: '..tostring(err))
+            menu.recover()
+            if capture then pcall(capture.release)end;if view then pcall(view.release)end
+            -- Keep registrations and the F10 listener alive for recovery.
+        end
     end,
     on_disable=close,
+    on_cleanup_poll=close,
 }

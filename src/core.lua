@@ -2,6 +2,10 @@
 local M={}
 local function id(s) assert(type(s)=='string' and #s<=80 and s:match('^[%w_-]+$'),'Invalid stable ID');return s end
 local function plain(s) assert(type(s)=='string' and #s<=512 and not s:find('[%c]'),'Invalid display text');return s end
+local function rich(s)
+    if type(s)=='table' then local blocks={};for _,block in ipairs(s)do assert(type(block)=='string','Text blocks must be strings');blocks[#blocks+1]=block end;s=table.concat(blocks,'\n\n')end
+    assert(type(s)=='string' and #s<=65536 and not s:find('[%z\1-\8\11\12\14-\31]'),'Invalid rich text');return s
+end
 local function copy(t) local r={};for k,v in pairs(t)do r[k]=v end;return r end
 function M.color_hex(v)
     if type(v)=='string' then local hex=v:gsub('^#','');assert(#hex==6 and hex:match('^%x+$'),'Use six HEX digits');return '#'..hex:upper()end
@@ -34,8 +38,8 @@ local function normalize(c,v)
     error('Control has no stored value')
 end
 local function stored(c)return c.type=='input' or c.type=='toggle' or c.type=='slider' or c.type=='choice' or c.type=='keybind' or c.type=='color'end
-function M.new(store,log)
-    local api={api=1,version='0.1.24',color_hex=M.color_hex,color_rgb=M.color_rgb,hsv_rgb=M.hsv_rgb,rgb_hsv=M.rgb_hsv,mods={},revision=0};log=log or function()end
+function M.new(store,log,grouping)
+    local api={api=1,version='0.1.49',color_hex=M.color_hex,color_rgb=M.color_rgb,hsv_rgb=M.hsv_rgb,rgb_hsv=M.rgb_hsv,mods={},revision=0};log=log or function()end
     local palette=store and store.load('mcm_custom_palette') or {};local swatches={}
     for i=1,12 do local ok,v=pcall(M.color_hex,palette['swatch_'..i]);if ok then swatches[#swatches+1]=v end end
     function api.swatches()return copy(swatches)end
@@ -54,13 +58,14 @@ function M.new(store,log)
         swatches=next_colors;return true
     end
     function api.register(spec)
-        assert(type(spec)=='table','Expected mod definition');id(spec.id);plain(spec.name)
+        assert(type(spec)=='table','Expected mod definition');id(spec.id);plain(spec.name);if spec.parent_name then plain(spec.parent_name)end
         assert(not api.mods[spec.id],'Mod already registered; unregister before replacing')
-        local mod={id=spec.id,name=spec.name,description=plain(spec.description or ''),pages={},categories={},controls={},values={},on_change=spec.on_change}
+        local mod={id=spec.id,name=spec.name,parent_name=spec.parent_name,description=rich(spec.description or ''),pages={},categories={},controls={},values={},on_change=spec.on_change}
         local categories={}
         for _,category in ipairs(spec.categories or {})do
             id(category.id);assert(not categories[category.id],'Duplicate category')
-            local c={id=category.id,name=plain(category.name),parent=category.parent};if c.parent then id(c.parent)end
+            assert(category.style==nil or category.style=='author','Invalid category style');assert(category.collapsed==nil or type(category.collapsed)=='boolean','Category collapsed must be boolean')
+            local c={id=category.id,name=plain(category.name),parent=category.parent,style=category.style,collapsed=category.collapsed};if c.parent then id(c.parent)end
             categories[c.id]=c;mod.categories[#mod.categories+1]=c
         end
         for _,c in ipairs(mod.categories)do
@@ -72,10 +77,28 @@ function M.new(store,log)
         for _,definition in ipairs(spec.pages)do
             id(definition.id);assert(not pages[definition.id],'Duplicate page');pages[definition.id]=true
             assert(definition.require_confirmation==nil or type(definition.require_confirmation)=='boolean','require_confirmation must be boolean')
+            assert(definition.style==nil or definition.style=='author','Invalid section style')
             assert(definition.category==nil or categories[definition.category],'Unknown page category')
-            local page={category=definition.category,id=definition.id,name=plain(definition.name),render_preview=definition.render_preview,controls={},require_confirmation=definition.require_confirmation==true,pending={},actions={}}
-            for _,definition_control in ipairs(definition.controls or {})do
-                local c=copy(definition_control);c.page=page;plain(c.label or '');plain(c.description or '')
+            local page={style=definition.style,category=definition.category,id=definition.id,name=plain(definition.name),render_preview=definition.render_preview,preview_popout=definition.preview_popout==true,controls={},require_confirmation=definition.dynamic~=true and definition.require_confirmation~=false,pending={},actions={}}
+            local flattened,group_ids={},{}
+            local function flatten(items,parents,depth)
+                assert(depth<=8,'Section nesting exceeds eight levels')
+                for _,item in ipairs(items)do
+                    local c=copy(item);c.groups=copy(parents);c.depth=depth;c.children=nil
+                    if item.children~=nil then
+                        assert(item.type=='section' and type(item.children)=='table','Only sections accept children')
+                        id(item.id);assert(not group_ids[item.id],'Duplicate section ID');group_ids[item.id]=true
+                        assert(item.collapsed==nil or type(item.collapsed)=='boolean','collapsed must be boolean')
+                        c.collapsible=true
+                    end
+                    flattened[#flattened+1]=c
+                    if c.collapsible then local ancestry=copy(parents);ancestry[#ancestry+1]=c.id;flatten(item.children,ancestry,depth+1)end
+                end
+            end
+            flatten(definition.controls or {},{},0)
+            for _,definition_control in ipairs(flattened)do
+                local c=copy(definition_control);c.page=page;if c.type=='text' then c.label=rich(c.label or '')else plain(c.label or '')end;c.description=rich(c.description or '')
+                assert(c.text_role==nil or c.text_role=='body' or c.text_role=='title' or c.text_role=='selection','Invalid text role')
                 assert(({input=true,color=true,toggle=true,slider=true,choice=true,keybind=true,button=true,text=true,section=true})[c.type],'Unsupported control')
                 assert(c.column==nil or c.column==1 or c.column==2,'Column must be 1 or 2')
                 if c.type~='text' and c.type~='section' then
@@ -86,9 +109,10 @@ function M.new(store,log)
                         c.min==c.min and c.max==c.max and c.step==c.step and math.abs(c.min)<1e12 and
                         math.abs(c.max)<1e12 and c.max>c.min and c.step>0 and c.step<=c.max-c.min,'Invalid slider')
                 elseif c.type=='choice' then
+                    assert(c.presentation==nil or c.presentation=='dropdown' or c.presentation=='selector' or c.presentation=='combined','Invalid choice presentation')
                     assert(type(c.choices)=='table' and #c.choices>0,'Choices required')
                     c.choices=copy(c.choices);for _,label in ipairs(c.choices)do plain(label)end
-                elseif c.type=='button' then assert(type(c.on_activate)=='function','Button callback required') end
+                elseif c.type=='button' then assert(type(c.on_activate)=='function','Button callback required');assert(c.require_confirmation==nil or type(c.require_confirmation)=='boolean','Action require_confirmation must be boolean') end
                 if stored(c)then
                     c.default=normalize(c,c.default)
                     local ok,value=pcall(normalize,c,saved[c.id]);if ok then mod.values[c.id]=value else mod.values[c.id]=c.default end
@@ -134,7 +158,7 @@ function M.new(store,log)
         function handle.queue(key)
             assert(api.mods[mod.id]==mod,'Retired registration')
             local c=assert(mod.controls[key],'Unknown control');assert(c.type=='button' and not c.disabled,'Button unavailable')
-            if not c.page.require_confirmation then return handle.activate(key)end
+            if c.require_confirmation~=true then return handle.activate(key)end
             c.page.actions[key]=true;return true
         end
         function handle.discard(page_id)local p=page_by_id(page_id);p.pending={};p.actions={};return true end
@@ -161,16 +185,22 @@ function M.new(store,log)
         end
         function handle.reset(key)return handle.set(key,assert(mod.controls[key],'Unknown control').default)end
         function handle.activate(key)
+            assert(api.mods[mod.id]==mod,'Retired registration')
             local c=assert(mod.controls[key],'Unknown control');assert(c.type=='button' and not c.disabled,'Button unavailable')
             return pcall(c.on_activate)
         end
         function handle.unregister()if api.mods[mod.id]==mod then api.mods[mod.id]=nil;api.revision=api.revision+1 end end
         mod.handle=handle;return handle
     end
+    function api.mount(mod_id,parent_name)
+        local mod=api.mods[mod_id];if not mod then return false end;plain(parent_name)
+        if mod.parent_name~=parent_name then mod.parent_name=parent_name;api.revision=api.revision+1 end
+        return true
+    end
     function api.list()
         local list={};for _,mod in pairs(api.mods)do if not mod.hidden then list[#list+1]=mod end end
         table.sort(list,function(a,b)if a.name==b.name then return a.id<b.id end;return a.name<b.name end)
-        return list
+        return grouping and grouping.list(list) or list
     end
     function api.get(mod,key)local m=assert(api.mods[mod],'Unknown mod');return m.handle.get(key)end
     function api.set(mod,key,value)local m=assert(api.mods[mod],'Unknown mod');return m.handle.set(key,value)end

@@ -31,7 +31,7 @@ function M.new(api,log,core)
   local names={};for name in pairs(registry.mods)do names[#names+1]=name end;table.sort(names)
   for index,name in ipairs(names)do
    local direct_hud=appearance and appearance.name=='DBF-HUD'
-   if not (direct_hud and (name=='DBF-HUD' or name=='DBF-HUD PLACEMENT' or name=='DBF-HUD LAYOUT EDITOR')) then
+   if not (direct_hud and (name=='DBF-HUD' or name=='DBF-HUD PLACEMENT' or name=='DBF-HUD LAYOUT EDITOR' or name=='DBF-HUD DEVELOPER')) then
    local source=registry.mods[name];local controls={};local links={};local pending={}
    for n,o in ipairs(source.order or {})do
     if (o.kind=='toggle' or o.kind=='slider' or o.kind=='choice') and not (name=='DBF-HUD' and appearance) then
@@ -41,7 +41,7 @@ function M.new(api,log,core)
    end
    if #controls>0 or (name=='DBF-HUD' and appearance) then
     local id='bingus_'..index;local temp=core.new(nil,log)
-    local handle=temp.register({id=id,name=name,description='Bingus Mod Options Menu compatibility. Settings apply immediately.',pages={{id='settings',name='Settings',controls=controls}}})
+    local handle=temp.register({id=id,name=name,description='Bingus Mod Options Menu compatibility. Confirm applies pending settings.',pages={{id='settings',name='Settings',controls=controls}}})
     local mod=temp.mods[id];mod.legacy=true;local validate_set=handle.set;local validated_get=handle.get
     function handle.get(key)local o=links[key];if not o then return end;if pending[key]~=nil then return pending[key]end;return host.get(o.id)end
     function handle.set(key,value)
@@ -55,6 +55,7 @@ function M.new(api,log,core)
      end
      return true
     end
+    mod.on_change=function(value,key) local ok,err=handle.set(key,value);if not ok then error(err) end end
     function handle.reset(key)return handle.set(key,links[key].default)end
     api.mods[id]=mod;imported[#imported+1]=id
    end
@@ -77,7 +78,7 @@ function M.new(api,log,core)
     local child=children[entry.id]
     if child then
      for _,oldpage in ipairs(child.pages)do
-      local page={id=entry.id..'_'..oldpage.id,name=entry.id=='layout_editor' and 'Layout' or (entry.id=='appearance' and oldpage.name or entry.name),category='hud',render_preview=oldpage.render_preview,controls={},pending={},actions={},require_confirmation=oldpage.require_confirmation==true}
+      local page={id=entry.id..'_'..oldpage.id,name=entry.id=='layout_editor' and 'Layout' or (entry.id=='appearance' and oldpage.name or entry.name),category='hud',render_preview=oldpage.render_preview,preview_popout=oldpage.preview_popout==true,controls={},pending={},actions={},require_confirmation=oldpage.require_confirmation==true}
       for _,old in ipairs(oldpage.controls)do
        local c={};for k,v in pairs(old)do c[k]=v end;c.page=page
        if old.id then c.id=entry.id..'_'..old.id;routes[c.id]={handle=child.handle,key=old.id};root.controls[c.id]=c end

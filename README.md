@@ -70,3 +70,5 @@ Click a slider value box to type a number. The first character replaces the old 
 </p>
 
 [Compact logo](assets/branding/logo.png) | [Wide banner](assets/branding/banner.png) | [Branding guide](assets/branding/BRANDING.md)
+[Preview 0.1.49 source checkpoint and validation limits](docs/PREVIEW-CHECKPOINT.md) describes mapped HUD preview roles, retained material updates and cleanup tests.
+
