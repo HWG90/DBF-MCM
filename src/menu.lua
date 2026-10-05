@@ -128,7 +128,7 @@ function M.new(api,measure)
 
     local wheel_bounds;local wheel_remainder=0;local manual_scroll=false
 
-    local drag,window_drag,color_drag,palette_drag,split_drag,preview_drag
+    local drag,window_drag,window_resize,color_drag,palette_drag,split_drag,preview_drag
 
     self.sidebar_width=330;self.help_scroll=0;local help_bounds;local help_key
 
@@ -138,7 +138,7 @@ function M.new(api,measure)
 
         self.visible=false;self.capture=false;self.text_edit=nil;self.color_picker=nil;self.dropdown=nil;self.mouse_held=false
 
-        drag=nil;window_drag=nil;color_drag=nil;palette_drag=nil;split_drag=nil;preview_drag=nil;self.preview_window=nil
+        drag=nil;window_drag=nil;window_resize=nil;color_drag=nil;palette_drag=nil;split_drag=nil;preview_drag=nil;self.preview_window=nil
 
         self.notice='Menu closed after an error; F10 reopens it'
 
@@ -266,7 +266,7 @@ function M.new(api,measure)
 
     function self.key(code,ctrl)
 
-        if code==121 then drag=nil;window_drag=nil;self.dropdown=nil;self.text_edit=nil;self.color_picker=nil end
+        if code==121 then drag=nil;window_drag=nil;window_resize=nil;self.dropdown=nil;self.text_edit=nil;self.color_picker=nil end
 
         if code==121 then self.visible=not self.visible;self.capture=false;return end -- F10
 
@@ -524,7 +524,7 @@ function M.new(api,measure)
 
         else
 
-            self.scroll=math.max(0,math.min(math.max(0,(self.display_total or #page.controls)-12),self.scroll-steps*3));manual_scroll=true
+            self.scroll=math.max(0,math.min(math.max(0,(self.display_total or #page.controls)-(self.settings_visible or 12)),self.scroll-steps*3));manual_scroll=true
 
         end
 
@@ -540,7 +540,7 @@ function M.new(api,measure)
 
         end
 
-        if not self.color_picker and not drag and not window_drag and not self.text_edit and input.wheel and input.mouse then local delta=input.wheel();local x,y=input.mouse();self.wheel(delta,x,y)end
+        if not self.color_picker and not drag and not window_drag and not window_resize and not self.text_edit and input.wheel and input.mouse then local delta=input.wheel();local x,y=input.mouse();self.wheel(delta,x,y)end
 
         for code=1,255 do local down=input.down(code);if down and not held[code] and code~=1 then self.key(code,input.down(17))end;held[code]=down end
 
@@ -578,9 +578,9 @@ function M.new(api,measure)
 
                 elseif x and y then
 
-                    self.color_picker.x=math.max(0,math.min(800,(x-color_drag.ox)/color_drag.scale-color_drag.dx))
+                    self.color_picker.x=math.max(0,math.min(math.max(0,(self.window_width or 1500)-704),(x-color_drag.ox)/color_drag.scale-color_drag.dx))
 
-                    self.color_picker.y=math.max(0,math.min(390,(y-color_drag.oy)/color_drag.scale-color_drag.dy))
+                    self.color_picker.y=math.max(0,math.min(math.max(0,(self.window_height or 820)-434),(y-color_drag.oy)/color_drag.scale-color_drag.dy))
 
                 end
 
@@ -588,7 +588,7 @@ function M.new(api,measure)
 
             if split_drag then
 
-                if not self.visible or not input.down(1)then split_drag=nil elseif x then self.sidebar_width=math.max(250,math.min(650,(x-split_drag.ox)/split_drag.scale))end
+                if not self.visible or not input.down(1)then split_drag=nil elseif x then self.sidebar_width=math.max(250,math.min(math.min(650,(self.window_width or 1500)-700),(x-split_drag.ox)/split_drag.scale))end
 
             end
 
@@ -597,6 +597,19 @@ function M.new(api,measure)
                 elseif x and y then
                     self.preview_window.x=math.max(0,math.min(preview_drag.max_x,x-preview_drag.dx))
                     self.preview_window.y=math.max(0,math.min(preview_drag.max_y,y-preview_drag.dy))
+                end
+            end
+            if window_resize then
+                if not self.visible or not input.down(1)then window_resize=nil
+                elseif x and y then
+                    local r=window_resize;local left,right,bottom,top=r.left,r.right,r.bottom,r.top
+                    if r.edge:find('w',1,true)then left=math.max(0,math.min(right-r.min_w,x))end
+                    if r.edge:find('e',1,true)then right=math.min(r.screen_w,math.max(left+r.min_w,x))end
+                    if r.edge:find('s',1,true)then bottom=math.max(0,math.min(top-r.min_h,y))end
+                    if r.edge:find('n',1,true)then top=math.min(r.screen_h,math.max(bottom+r.min_h,y))end
+                    self.window_x,self.window_y=left,bottom
+                    self.window_width,self.window_height=(right-left)/r.scale,(top-bottom)/r.scale
+                    self.dropdown=nil
                 end
             end
             if window_drag then
@@ -641,9 +654,16 @@ function M.new(api,measure)
 
     function self.compose(w,h)
 
-        if not self.visible then hits={};drag=nil;window_drag=nil;self.dropdown=nil;self.text_edit=nil;self.color_picker=nil;return {}end
+        if not self.visible then hits={};drag=nil;window_drag=nil;window_resize=nil;self.dropdown=nil;self.text_edit=nil;self.color_picker=nil;return {}end
 
-        local commands={};hits={};local s=math.min(w/1920,h/1080);local ox,oy=math.max(0,math.min(math.max(0,w-1500*s),self.window_x or (w-1500*s)/2)),math.max(0,math.min(math.max(0,h-820*s),self.window_y or (h-820*s)/2))
+        local commands={};hits={};local s=math.min(w/1920,h/1080)
+        local ww=math.max(1100,math.min(w/s,self.window_width or 1500));local wh=math.max(600,math.min(h/s,self.window_height or 820))
+        local ox,oy=math.max(0,math.min(w-ww*s,self.window_x or (w-ww*s)/2)),math.max(0,math.min(h-wh*s,self.window_y or (h-wh*s)/2))
+        self.window_width,self.window_height=ww,wh
+        self.window_bounds={x=ox,y=oy,w=ww*s,h=wh*s,scale=s}
+        self.sidebar_width=math.max(250,math.min(self.sidebar_width,ww-700))
+        local tree_visible=math.max(1,math.floor((wh-260)/31));local settings_visible=math.max(1,math.floor((wh-364)/38))
+        self.tree_visible,self.settings_visible=tree_visible,settings_visible
 
         local visible_text_age={}
 
@@ -693,35 +713,35 @@ function M.new(api,measure)
 
         end
 
-        rect(0,0,1500,820,{16,20,24},.98);rect(0,760,1500,60,{28,33,38});rect(self.sidebar_width,60,2,700,muted)
+        rect(0,0,ww,wh,{16,20,24},.98);rect(0,wh-60,ww,60,{28,33,38});rect(self.sidebar_width,60,2,wh-120,muted)
 
-        hit(0,760,1500,60,function(mx,my)
+        hit(0,wh-60,ww,60,function(mx,my)
 
             if drag or self.capture then return end
 
-            window_drag={dx=mx-ox,dy=my-oy,max_x=math.max(0,w-1500*s),max_y=math.max(0,h-820*s)}
+            window_drag={dx=mx-ox,dy=my-oy,max_x=math.max(0,w-ww*s),max_y=math.max(0,h-wh*s)}
 
         end)
 
-        wheel_bounds={x=ox,y=oy+196*s,w=1500*s,h=504*s,split=ox+self.sidebar_width*s}
+        wheel_bounds={x=ox,y=oy+196*s,w=ww*s,h=(wh-316)*s,split=ox+self.sidebar_width*s}
 
-        text(30,777,'MOD CONFIGURATION',28,accent)
+        text(30,wh-43,'MOD CONFIGURATION',28,accent)
 
-        rect(1445,775,38,30,{65,73,80});text(1457,782,'X',20,white)
+        rect(ww-55,wh-45,38,30,{65,73,80});text(ww-43,wh-38,'X',20,white)
 
-        hit(1445,775,38,30,function()self.visible=false;self.capture=false;self.dropdown=nil;self.text_edit=nil;self.color_picker=nil end)
+        hit(ww-55,wh-45,38,30,function()self.visible=false;self.capture=false;self.dropdown=nil;self.text_edit=nil;self.color_picker=nil end)
 
-        text(25,715,'MODS',18,muted)
+        text(25,wh-105,'MODS',18,muted)
 
         local mods=api.list();local mod,page=active()
 
-        local sidebar=self.sidebar();tree_max=math.max(0,#sidebar-18);tree_scroll=math.max(0,math.min(tree_scroll,tree_max))
+        local sidebar=self.sidebar();tree_max=math.max(0,#sidebar-tree_visible);tree_scroll=math.max(0,math.min(tree_scroll,tree_max))
 
         if not tree_manual then
 
             for i,node in ipairs(sidebar)do if node.kind=='mod' and node.index==self.selected then
 
-                if i<=tree_scroll then tree_scroll=i-1 elseif i>tree_scroll+18 then tree_scroll=i-18 end
+                if i<=tree_scroll then tree_scroll=i-1 elseif i>tree_scroll+tree_visible then tree_scroll=i-tree_visible end
 
             end end
 
@@ -729,9 +749,9 @@ function M.new(api,measure)
 
         self.mod_scroll=tree_scroll
 
-        for i=tree_scroll+1,math.min(#sidebar,tree_scroll+18)do
+        for i=tree_scroll+1,math.min(#sidebar,tree_scroll+tree_visible)do
 
-            local entry=sidebar[i];local y=671-(i-tree_scroll-1)*31;local x=25+entry.depth*16
+            local entry=sidebar[i];local y=wh-149-(i-tree_scroll-1)*31;local x=25+entry.depth*16
 
             if entry.kind=='mod' then
 
@@ -793,13 +813,13 @@ function M.new(api,measure)
 
         end
 
-        scrollbar('mods',self.sidebar_width-10,140,558,#sidebar,18,tree_scroll)
+        scrollbar('mods',self.sidebar_width-10,140,wh-262,#sidebar,tree_visible,tree_scroll)
 
-        if not mod then text(365,670,'No mods registered. See the author example.',24)
+        if not mod then text(self.sidebar_width+35,wh-150,'No mods registered. See the author example.',24)
 
         else
 
-            bounded(self.sidebar_width+35,712,mod.name,28,accent,1445-self.sidebar_width);bounded(self.sidebar_width+35,674,page.name,22,white,1445-self.sidebar_width)
+            bounded(self.sidebar_width+35,wh-108,mod.name,28,accent,ww-55-self.sidebar_width);bounded(self.sidebar_width+35,wh-146,page.name,22,white,ww-55-self.sidebar_width)
 
             -- Sections are named in the sidebar; no redundant ordinal footer.
 
@@ -807,24 +827,26 @@ function M.new(api,measure)
 
                 local pending=0;for _ in pairs(page.pending)do pending=pending+1 end;for _ in pairs(page.actions)do pending=pending+1 end
 
-                text(850,90,'CONFIRM REQUIRED ('..pending..')',16,accent)
+                text(ww-650,90,'CONFIRM REQUIRED ('..pending..')',16,accent)
 
-                rect(1160,81,135,29,{65,73,80});text(1170,90,'APPLY',18,accent)
+                rect(ww-340,81,135,29,{65,73,80});text(ww-330,90,'APPLY',18,accent)
 
-                rect(1310,81,135,29,{65,73,80});text(1320,90,'DISCARD',18,white)
+                rect(ww-190,81,135,29,{65,73,80});text(ww-180,90,'DISCARD',18,white)
 
-                hit(1160,81,135,29,function()local ok,err=mod.handle.confirm(page.id);self.notice=ok and ('Confirmed and saved'..(err and '; '..tostring(err) or '')) or tostring(err)end)
+                hit(ww-340,81,135,29,function()local ok,err=mod.handle.confirm(page.id);self.notice=ok and ('Confirmed and saved'..(err and '; '..tostring(err) or '')) or tostring(err)end)
 
-                hit(1310,81,135,29,function()mod.handle.discard(page.id);self.notice='Pending edits discarded'end)
+                hit(ww-190,81,135,29,function()mod.handle.discard(page.id);self.notice='Pending edits discarded'end)
 
             end
 
             local rows=selectable(page);self.row=math.max(1,math.min(self.row,#rows));local selected=rows[self.row]
 
-            local wide=type(page.render_preview)~='function' or page.preview_popout
-            for _,control in ipairs(page.controls)do if control.column then wide=false end end
+            local compact=ww-self.sidebar_width<1135
+            local preview_popout=page.preview_popout or compact
+            local wide=type(page.render_preview)~='function' or preview_popout
+            for _,control in ipairs(page.controls)do if control.column and not compact then wide=false end end
             local settings_x=self.sidebar_width+35
-            local available=1475-settings_x
+            local available=ww-25-settings_x
             local row_width=wide and available or available/2-30
             local display={};local selected_at=1;local ordinal=0
             for _,control in ipairs(visible_controls(page))do
@@ -839,17 +861,17 @@ function M.new(api,measure)
             end
             self.display_total=#display
             if not manual_scroll and selected and selected_at<=self.scroll then self.scroll=selected_at-1 end
-            if not manual_scroll and selected and selected_at>self.scroll+12 then self.scroll=selected_at-12 end
-            self.scroll=math.max(0,math.min(self.scroll,math.max(0,#display-12)))
+            if not manual_scroll and selected and selected_at>self.scroll+settings_visible then self.scroll=selected_at-settings_visible end
+            self.scroll=math.max(0,math.min(self.scroll,math.max(0,#display-settings_visible)))
             local columns={0,0}
             for i,entry in ipairs(display)do
                 local c=entry.control
 
-                if i>self.scroll and i<=self.scroll+12 then
+                if i>self.scroll and i<=self.scroll+settings_visible then
 
-                    local col=c.column or 1;columns[col]=columns[col]+1
+                    local col=compact and 1 or (c.column or 1);columns[col]=columns[col]+1
 
-                    local x=settings_x+(col-1)*(available/2);local y=623-(columns[col]-1)*38;local row_index=entry.row
+                    local x=settings_x+(col-1)*(available/2);local y=wh-197-(columns[col]-1)*38;local row_index=entry.row
 
                     if c==selected then rect(x-5,y-7,row_width+5,34,{48,58,65});rect(x-5,y-7,3,34,accent)end
 
@@ -1027,19 +1049,19 @@ function M.new(api,measure)
 
             end
 
-            scrollbar('settings',1480,196,456,#display,12,self.scroll)
+            scrollbar('settings',ww-20,196,wh-364,#display,settings_visible,self.scroll)
 
             -- The scrollbar communicates position without debug row counts.
 
-            if type(page.render_preview)=='function' and page.preview_popout then
-                rect(1135,690,300,32,{55,63,70});text(1145,699,'OPEN HUD PREVIEW',17,accent)
-                hit(1135,690,300,32,function()
+            if type(page.render_preview)=='function' and preview_popout then
+                rect(ww-365,wh-130,300,32,{55,63,70});text(ww-355,wh-121,'OPEN HUD PREVIEW',17,accent)
+                hit(ww-365,wh-130,300,32,function()
                     self.window_x=0
                     self.preview_window={mod=mod,page=page,x=math.max(0,w-420*s),y=math.max(0,(h-450*s)/2)}
                 end)
             elseif type(page.render_preview)=='function' then
 
-                local ok,preview=pcall(page.render_preview,{x=ox+950*s,y=oy+285*s,w=460*s,h=350*s,scale=s})
+                local ok,preview=pcall(page.render_preview,{x=ox+(settings_x+available/2+15)*s,y=oy+220*s,w=(available/2-40)*s,h=(wh-470)*s,scale=s})
 
                 if ok and type(preview)=='table' then
 
@@ -1055,7 +1077,7 @@ function M.new(api,measure)
 
             if help_key~=key then self.help_scroll=0;help_key=key end
 
-            local hx=self.sidebar_width+35;local hw=1460-hx
+            local hx=self.sidebar_width+35;local hw=ww-40-hx
 
             local lines=M.rich(help,hw*s,18*s,measure);local visible=3
 
@@ -1071,16 +1093,16 @@ function M.new(api,measure)
 
             end
 
-            scrollbar('help',1470,126,64,#lines,visible,self.help_scroll)
+            scrollbar('help',ww-30,126,64,#lines,visible,self.help_scroll)
 
         end
 
-        hit(self.sidebar_width-6,196,12,510,function()split_drag={ox=ox,scale=s}end)
+        hit(self.sidebar_width-6,196,12,wh-310,function()split_drag={ox=ox,scale=s}end)
 
-        rect(0,0,1500,55,{18,23,27})
-        rect(0,55,1500,1,{110,88,35})
-        bounded(25,32,'F10 / Esc Close   Tab Focus   Arrows Navigate / Change   Enter Select   Home Default   PgUp / PgDn Sections',14,muted,1120)
-        bounded(1180,32,'github.com/HWG90',16,{255,225,120},295)
+        rect(0,0,ww,55,{18,23,27})
+        rect(0,55,ww,1,{110,88,35})
+        bounded(25,32,'F10 / Esc Close   Tab Focus   Arrows Navigate / Change   Enter Select   Home Default   PgUp / PgDn Sections',14,muted,ww-380)
+        bounded(ww-320,32,'github.com/HWG90',16,{255,225,120},295)
         -- A readable URL; no external browser is opened by menu rendering.
 
         -- Show the actual status, not a fixed character slice of a Lua error.
@@ -1099,15 +1121,28 @@ function M.new(api,measure)
 
         if #line>0 then lines[#lines+1]=line end
 
-        if #notice>0 then bounded(25,64,notice,15,accent,1450)end
+        if #notice>0 then bounded(25,64,notice,15,accent,ww-50)end
 
+        local function resize_hit(edge,x,y,rw,rh)
+            hit(x,y,rw,rh,function()
+                if drag or self.capture then return end
+                window_drag=nil;split_drag=nil
+                window_resize={edge=edge,left=ox,right=ox+ww*s,bottom=oy,top=oy+wh*s,min_w=1100*s,min_h=600*s,screen_w=w,screen_h=h,scale=s}
+            end)
+        end
+        resize_hit('w',0,14,6,wh-28);resize_hit('e',ww-6,14,6,wh-28)
+        resize_hit('s',14,0,ww-28,6);resize_hit('n',14,wh-6,ww-28,6)
+        for _,corner in ipairs({{'sw',0,0},{'se',ww-14,0},{'nw',0,wh-14},{'ne',ww-14,wh-14}})do
+            resize_hit(corner[1],corner[2],corner[3],14,14)
+            rect(corner[2]+4,corner[3]+4,6,6,muted);commands[#commands].resize_handle=corner[1]
+        end
         if self.dropdown then
 
             local overlay_start=#commands+1
 
             local d=self.dropdown;local count=math.min(8,#d.control.choices);local height=count*31+8
 
-            local top=math.max(height+8,math.min(752,d.top));local x=d.x;local dw=d.width or 250
+            local top=math.max(height+8,math.min(wh-68,d.top));local dw=math.min(ww-16,d.width or 250);local x=math.max(8,math.min(ww-dw-8,d.x))
 
             -- Overlay hit regions take priority and consume outside clicks.
 
@@ -1177,7 +1212,7 @@ function M.new(api,measure)
 
         if self.color_picker then
 
-            local p=self.color_picker;local start=#commands+1;local px,py=p.x or 400,p.y or 195
+            local p=self.color_picker;local start=#commands+1;local px,py=math.max(0,math.min(ww-704,p.x or 400)),math.max(0,math.min(wh-434,p.y or 195))
 
             hit(-ox/s,-oy/s,w/s,h/s,function()self.color_picker=nil;self.text_edit=nil end)
 
