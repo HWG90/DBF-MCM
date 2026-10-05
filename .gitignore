@@ -2,3 +2,13 @@ dist/
 tests/tmp/
 __pycache__/
 native/build/
+
+# Chat/review materials belong in the suite review archive, not source control.
+/assets/branding/PROMPTS.md
+/assets/review/
+/docs/galleries/
+/review/
+/scratch/
+/work/
+/outputs/
+codex-clipboard-*

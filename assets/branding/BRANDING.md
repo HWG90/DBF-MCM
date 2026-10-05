@@ -9,4 +9,4 @@ Use **DBF-MCM** as the short project name and **Diver's Best Friend — Mod Conf
 
 Retain the charcoal tactical grid, warm yellow accents, ivory lettering, angular frame and helmet identity. MCM's menu rows and sliders distinguish it from the other DBF projects. Preserve aspect ratio and generous margins; keep version numbers outside the artwork.
 
-The README uses the banner at the top and a centered 320-pixel logo in its branding section. The artwork's generation notes are in [PROMPTS.md](PROMPTS.md).
+The README uses the banner at the top and a centered 320-pixel logo in its branding section.
