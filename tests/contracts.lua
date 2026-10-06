@@ -1,5 +1,6 @@
 local core=assert(loadfile('src/core.lua'))();local menu_module=assert(loadfile('src/menu.lua'))()
 local count=0
+local function rendered_text(m,label)local found;for _,c in ipairs(m.compose(1920,1080))do if c.type=='text'and c.text==label then found=c end end;assert(found,'Missing rendered text: '..label);return found end
 local function test(name,fn)local ok,err=pcall(fn);assert(ok,name..': '..tostring(err));count=count+1;print('PASS '..name)end
 local function spec(id)
  return {id=id or 'demo',name=id or 'Demo',pages={{id='general',name='General',controls={
@@ -139,12 +140,14 @@ end)
 test('slider drag previews snaps clamps and commits once on release',function()
  local core=assert(loadfile('src/core.lua'))();local menu_module=assert(loadfile('src/menu.lua'))();local writes=0
  local api=core.new({load=function()return {}end,save=function()writes=writes+1;return true end},function()end)
- api.register({id='drag',name='Drag',pages={{id='p',name='Page',controls={{id='v',type='slider',label='Slider',min=0,max=100,step=5,default=0}}}}})
- local m=menu_module.new(api);m.visible=true;m.compose(1920,1080)
- local down=true;local px=910;local input={down=function(k)return k==1 and down end,mouse=function()return px,753 end}
- m.tick(input);assert(writes==0);px=1000;m.tick(input);assert(writes==0)
+ api.register({id='drag',name='Drag',pages={{id='p',name='Page',require_confirmation=false,controls={{id='v',type='slider',label='Slider',min=0,max=100,step=5,default=0}}}}})
+ local m=menu_module.new(api);m.visible=true;local track
+ for _,c in ipairs(m.compose(1920,1080))do if c.type=='rect'and c.c[1]==31 and c.c[2]==76 and c.c[3]==84 and c.h<10 then track=c end end
+ assert(track,'Slider track missing')
+ local down=true;local px=track.x;local input={down=function(k)return k==1 and down end,mouse=function()return px,track.y end}
+ m.tick(input);assert(writes==0);px=track.x+track.w;m.tick(input);assert(writes==0)
  down=false;m.tick(input);assert(api.get('drag','v')==100 and writes==1)
- m.compose(1920,1080);down=true;px=900;m.tick(input);m.key(121);down=false;m.tick(input);assert(writes==1)
+ m.compose(1920,1080);down=true;px=track.x;m.tick(input);m.key(121);down=false;m.tick(input);assert(writes==1)
 end)
 test('left arrow cannot open the closed menu; physical F10 still opens it',function()
  local core=assert(loadfile('src/core.lua'))();local menu_module=assert(loadfile('src/menu.lua'))()
@@ -169,7 +172,7 @@ test('confirmation page stages settings and actions and persists before callback
  local h=api.register({id='confirm',name='Confirm',pages={{id='sensitive',name='Sensitive',require_confirmation=true,controls={
  {id='a',type='toggle',label='A',default=false,on_change=function()called=called+1 end},
  {id='b',type='slider',label='B',min=0,max=10,step=1,default=0},
- {id='action',type='button',label='Action',on_activate=function()actions=actions+1 end}}}}})
+ {id='action',type='button',label='Action',require_confirmation=true,on_activate=function()actions=actions+1 end}}}}})
  h.edit('a',true);h.edit('b',5);h.queue('action');assert(h.preview('a') and not h.get('a') and writes==0 and called==0 and actions==0)
  assert(not h.confirm('sensitive'));assert(not h.get('a') and h.preview('b')==5 and called==0 and actions==0)
  fail=false;assert(h.confirm('sensitive'));assert(h.get('a') and h.get('b')==5 and called==1 and actions==1 and writes==2)
@@ -187,9 +190,9 @@ end)
 test('long dropdown scrolls independently selects once and Escape cancels',function()
  local core=assert(loadfile('src/core.lua'))();local module=assert(loadfile('src/menu.lua'))();local api=core.new(nil,function()end)
  local choices={};for i=1,37 do choices[i]='Weapon '..i end
- api.register({id='dropdown',name='Dropdown',pages={{id='p',name='Page',controls={{id='v',type='choice',label='Weapon',choices=choices,default=1}}}}})
+ api.register({id='dropdown',name='Dropdown',pages={{id='p',name='Page',require_confirmation=false,controls={{id='v',type='choice',label='Weapon',choices=choices,default=1}}}}})
  local m=module.new(api);m.visible=true;m.compose(1920,1080)
- local down=true;local input={down=function(k)return k==1 and down end,mouse=function()return 900,753 end}
+ local value=rendered_text(m,'Weapon 1');local down=true;local input={down=function(k)return k==1 and down end,mouse=function()return value.x,value.y end}
  m.tick(input);assert(m.dropdown);local commands=m.compose(1920,1080);local thumb=false
  for _,c in ipairs(commands)do if c.scrollbar=='dropdown'then thumb=true end end;assert(thumb)
  m.wheel(-12000,900,500);assert(m.dropdown.scroll==29 and m.scroll==0 and api.get('dropdown','v')==1)
@@ -205,13 +208,13 @@ test('popup primitives render above underlying text and choice arrows remain usa
  view.new(sr).draw({{type='text',x=0,y=0,text='behind',size=18,c={255,255,255},a=1},{type='rect',x=0,y=0,w=10,h=10,c={0,0,0},a=1,layer=200},{type='text',x=0,y=0,text='popup',size=18,c={255,255,255},a=1,layer=200}})
  assert(zs[2]>zs[1] and zs[3]>zs[2])
  local core=assert(loadfile('src/core.lua'))();local module=assert(loadfile('src/menu.lua'))();local api=core.new(nil,function()end)
- api.register({id='arrows',name='Arrows',pages={{id='p',name='Page',controls={{id='v',type='choice',label='Choice',choices={'A','B'},default=1}}}}})
- local m=module.new(api);m.visible=true;m.compose(1920,1080);m.tick({down=function(k)return k==1 end,mouse=function()return 1080,753 end})
+ api.register({id='arrows',name='Arrows',pages={{id='p',name='Page',require_confirmation=false,controls={{id='v',type='choice',label='Choice',choices={'A','B'},default=1}}}}})
+ local m=module.new(api);m.visible=true;local arrow=rendered_text(m,'>');m.tick({down=function(k)return k==1 end,mouse=function()return arrow.x,arrow.y end})
  assert(api.get('arrows','v')==2 and not m.dropdown)
 end)
 test('text entry commits when clicking away without Enter',function()
  local core=assert(loadfile('src/core.lua'))();local module=assert(loadfile('src/menu.lua'))();local api=core.new(nil,function()end)
- api.register({id='entry',name='Entry',pages={{id='p',name='Page',controls={{id='name',type='input',label='Name',default='Old'}}}}})
+ api.register({id='entry',name='Entry',pages={{id='p',name='Page',require_confirmation=false,controls={{id='name',type='input',label='Name',default='Old'}}}}})
  local m=module.new(api);m.visible=true;m.compose(1920,1080)
  m.text_edit={mod=api.list()[1],control=api.list()[1].pages[1].controls[1],text='Goose',replace=false}
  m.tick({down=function(k)return k==1 end,mouse=function()return 1900,1000 end})
@@ -220,9 +223,9 @@ end)
 
 test('numeric value entry commits snapped values rejects range errors and cancels',function()
  local core=assert(loadfile('src/core.lua'))();local module=assert(loadfile('src/menu.lua'))();local api=core.new(nil,function()end)
- api.register({id='entry',name='Entry',pages={{id='p',name='Page',controls={{id='v',type='slider',label='Value',min=-10,max=10,step=.5,default=0}}}}})
+ api.register({id='entry',name='Entry',pages={{id='p',name='Page',require_confirmation=false,controls={{id='v',type='slider',label='Value',min=-10,max=10,step=.5,default=0}}}}})
  local m=module.new(api);m.visible=true;m.compose(1920,1080)
- local down=true;local input={down=function(k)return k==1 and down end,mouse=function()return 1040,753 end}
+ local value=rendered_text(m,'0');local down=true;local input={down=function(k)return k==1 and down end,mouse=function()return value.x,value.y end}
  m.tick(input);assert(m.text_edit);m.key(189);m.key(50);m.key(190);m.key(51);m.key(13);assert(api.get('entry','v')==-2.5 and not m.text_edit)
  down=false;m.tick(input);m.compose(1920,1080);down=true;m.tick(input);m.key(57);m.key(57);m.key(13);assert(m.text_edit and api.get('entry','v')==-2.5 and m.visible)
  m.key(27);assert(not m.text_edit and m.visible)
@@ -248,11 +251,12 @@ test('HUD compatibility nesting retains original setting routes and callbacks',f
  local called=0;state.callbacks['original.2']={function()called=called+1 end}
  local api=core.new(nil,function()end);local importer=bridge.new(api,function()end,core);importer.poll(host)
  assert(#api.list()==1);local root=api.list()[1];assert(root.name=='DBF-HUD' and #root.pages==3 and #root.categories==1)
- assert(root.handle.edit('layout_editor_option_1',true));assert(values['original.2'] and called==1 and not values['original.1'])
+ assert(root.handle.edit('layout_editor_option_1',true));assert(not values['original.2'] and called==0)
+ assert(root.handle.confirm('layout_editor_settings'));assert(values['original.2'] and called==1 and not values['original.1'])
  local nodes=menu.new(api).navigation(root);assert(#nodes==4 and nodes[1].category.name=='HUD')
  assert(nodes[2].page.name=='Layout' and nodes[3].page.name=='Placement' and nodes[4].page.name=='General')
  local color
- api.register({id='dbf_hud_fonts',name='DBF-HUD Appearance',pages={{id='appearance',name='Appearance',controls={{id='color',type='color',label='Decorations',default='#FFFFFF',on_change=function(v)color=v end}}}}})
+ api.register({id='dbf_hud_fonts',name='DBF-HUD Appearance',pages={{id='appearance',name='Appearance',require_confirmation=false,controls={{id='color',type='color',label='Decorations',default='#FFFFFF',on_change=function(v)color=v end}}}}})
  importer.poll(host);assert(#api.list()==1)
  root=api.list()[1];assert(#root.pages==3 and root.pages[3].name=='Appearance')
  assert(root.handle.edit('appearance_color','#123456'));assert(color=='#123456')
@@ -287,7 +291,7 @@ end)
 test('color dialog uses a higher bounded depth than the main menu',function()
  local core=assert(loadfile('src/core.lua'))();local module=assert(loadfile('src/menu.lua'))();local api=core.new(nil,function()end)
  api.register({id='color_depth',name='Color Depth',pages={{id='p',name='Page',controls={{id='v',type='color',label='Color',default='#FF0000'}}}}})
- local m=module.new(api);m.visible=true;m.compose(1920,1080);m.tick({down=function(k)return k==1 end,mouse=function()return 1040,753 end})
+ local m=module.new(api);m.visible=true;local value=rendered_text(m,'#FF0000');m.tick({down=function(k)return k==1 end,mouse=function()return value.x,value.y end})
  assert(m.color_picker);local popup=0
  for index,c in ipairs(m.compose(1920,1080))do local z=(c.layer or 100)+index*.01;assert(z<512)
   if c.layer==300 then popup=popup+1;assert(z>200)end
@@ -297,7 +301,7 @@ end)
 test('color dialog body clicks stay open and its title bar drags independently',function()
  local core=assert(loadfile('src/core.lua'))();local module=assert(loadfile('src/menu.lua'))();local api=core.new(nil,function()end)
  api.register({id='color_move',name='Color Move',pages={{id='p',name='Page',controls={{id='v',type='color',label='Color',default='#FF0000'}}}}})
- local m=module.new(api);m.visible=true;m.compose(1920,1080);local down=true;local px,py=1040,753
+ local m=module.new(api);m.visible=true;local value=rendered_text(m,'#FF0000');local down=true;local px,py=value.x,value.y
  local input={down=function(k)return k==1 and down end,mouse=function()return px,py end}
  m.tick(input);m.compose(1920,1080);down=false;m.tick(input);px=1090;py=450;down=true;m.tick(input);assert(m.color_picker)
  down=false;m.tick(input);px=800;py=730;down=true;m.tick(input);px=900;py=780;m.tick(input)
@@ -305,7 +309,7 @@ test('color dialog body clicks stay open and its title bar drags independently',
 end)
 test('color fields update on blur and Use Color includes the unsubmitted field',function()
  local core=assert(loadfile('src/core.lua'))();local module=assert(loadfile('src/menu.lua'))();local api=core.new(nil,function()end)
- api.register({id='blur',name='Blur',pages={{id='p',name='Page',controls={{id='v',type='color',label='Color',default='#000000'}}}}})
+ api.register({id='blur',name='Blur',pages={{id='p',name='Page',require_confirmation=false,controls={{id='v',type='color',label='Color',default='#000000'}}}}})
  local m=module.new(api);m.visible=true;m.color_picker={mod=api.mods.blur,control=api.mods.blur.controls.v,rgb={0,0,0}}
  m.text_edit={color_channel=1,text='128'};m.compose(1920,1080)
  m.tick({down=function(k)return k==1 end,mouse=function()return 1010,626 end})
