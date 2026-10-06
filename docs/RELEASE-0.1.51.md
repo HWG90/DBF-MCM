@@ -8,7 +8,9 @@ Changes: retain menu/navigation on focus loss while releasing capture; suppress 
 
 All 11 focused LuaJIT suites pass: capture recovery, diagnostics, focus lifecycle, grouping navigation, loader handoff recovery, numeric legacy groups, linked controls, manager handoff, preview shader, storage provider and window resizing. Native input-policy/held-release checks and PowerShell deployment guards pass without attaching to the game.
 
-The broad legacy suite passes its first 11 cases, then fails `keyboard edits selected settings, defaults and key capture` at `tests/contracts.lua:65` (initial Enter/toggle/default expectation). The callback fixture now checks the isolated callback error explicitly instead of assuming successful commits never log. Remaining broad-suite cases are not claimed passing.
+The original keyboard failure reproduced against the previous maintained commit `f11c1c7`. Its fixture assumed immediate saving, while pages default to staging values until Apply. A direct default-page probe verified Enter stages the toggle and explicit confirmation commits it. The immediate-edit keyboard fixture now opts out of confirmation and passes. The callback fixture checks the isolated error explicitly while allowing the successful-commit log.
+
+With these fixture corrections, both previous and current source pass 19 broad cases, then fail the same legacy slider-drag assertion at `tests/contracts.lua:146`. That test uses fixed mouse coordinates and expects an immediate saved value on a default confirmation page. It remains a pre-existing fixture/behavior investigation, not evidence of a new release regression; later broad cases are not claimed passing. Focused resizing, persistence and confirmation contracts pass. Baseline comparison used isolated source files under dist and never changed the maintained source or game state.
 
 Package verification covers Lua compilation, ZIP integrity, standalone archive round-trip/startup payload, matching runtime/DLL bytes, versions and hashes. Build receipts and SHA256SUMS are local dist outputs.
 

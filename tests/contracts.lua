@@ -61,7 +61,9 @@ test('keyboard navigation reaches mods beyond the eighth and their pages',functi
  m.key(34);assert(m.page==2);local c=m.compose(1920,1080);assert(#c>0 and m.mod_scroll>0)
 end)
 test('keyboard edits selected settings, defaults and key capture',function()
- local api=core.new();local h=api.register(spec());local m=menu_module.new(api);m.key(121);m.key(9);m.key(13)
+ -- This case exercises immediate edits; default pages now stage until Apply.
+ local api=core.new();local definition=spec();definition.pages[1].require_confirmation=false
+ local h=api.register(definition);local m=menu_module.new(api);m.key(121);m.key(9);m.key(13)
  assert(h.get('toggle')==false);m.key(36);assert(h.get('toggle')==true)
  m.key(40);m.key(39);assert(h.get('slider')==5.5)
  m.key(40);m.key(40);m.key(13);m.key(65);assert(h.get('key')==65 and not m.capture)

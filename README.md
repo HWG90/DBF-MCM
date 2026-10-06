@@ -37,4 +37,4 @@ Build the loose packages with `build.ps1 -Python <non-Store Python executable>`;
 
 ## Validation limits
 
-Preview 0.1.51 preserves the current focus/capture, resizing, legacy grouping, linked controls and per-mod storage changes. Offline tests and package checks do not establish live loading or input behavior for every route. The broad legacy contract suite still fails its keyboard-edit assertion; see [release validation](docs/RELEASE-0.1.51.md). Controller navigation and native pause-menu integration are not provided. Intermittent dropdown text loss remains under investigation.
+Preview 0.1.51 preserves the current focus/capture, resizing, legacy grouping, linked controls and per-mod storage changes. Offline tests and package checks do not establish live loading or input behavior for every route. The broad legacy contract suite still fails a pre-existing slider-drag assertion after correcting stale keyboard/logging fixtures; see [release validation](docs/RELEASE-0.1.51.md). Controller navigation and native pause-menu integration are not provided. Intermittent dropdown text loss remains under investigation.
