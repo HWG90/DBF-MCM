@@ -533,6 +533,19 @@ function M.new(api,measure)
 
     end
 
+    function self.input_focus(focused,input)
+        if not focused then
+            if console then console.release()end
+            drag=nil;window_drag=nil;window_resize=nil;self.capture=false;self.mouse_held=false;self.suspended=true
+            return false
+        end
+        if self.suspended then
+            for code=1,255 do held[code]=input.down(code)end
+            self.mouse_held=input.down(1);self.suspended=false
+            return false -- Do not replay keys/clicks held in another application.
+        end
+        return true
+    end
     function self.tick(input)
         if console then input=console.filter(input,self.visible)end
 
@@ -899,7 +912,16 @@ function M.new(api,measure)
                     local reserved=value_width and (value_width+(c.type=='choice' and (c.presentation or 'combined')~='dropdown' and 60 or 0)+12) or 290
                     local label_width=informational and row_width or math.max(0,row_width-reserved)
 
-                    if entry.body then text(x,y,label,20,c.disabled and muted or white)else bounded(x,y,label,20,c.disabled and muted or (c.type=='section' and accent or white),label_width) end
+                    if c.type=='text'and type(c.swatches)=='table'then
+                        local count=math.min(8,#c.swatches);local size=math.max(12,math.min(34,(row_width-12)/math.max(1,count)-8))
+                        for slot=1,count do local swatch=c.swatches[slot];local color=swatch.rgb
+                            if type(color)=='table'and #color==3 then
+                                local rgb={};for ch=1,3 do rgb[ch]=math.max(0,math.min(255,tonumber(color[ch])or 0))end
+                                rect(x+(slot-1)*(size+8),y-4,size,size,rgb)
+                                text(x+(slot-1)*(size+8)+3,y+3,tostring(swatch.row or slot),14,{255,255,255})
+                            end
+                        end
+                    elseif entry.body then text(x,y,label,20,c.disabled and muted or white)else bounded(x,y,label,20,c.disabled and muted or (c.type=='section' and accent or white),label_width) end
 
                     if c.collapsible then
                         local header=c

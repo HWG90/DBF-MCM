@@ -39,7 +39,8 @@ local function normalize(c,v)
 end
 local function stored(c)return c.type=='input' or c.type=='toggle' or c.type=='slider' or c.type=='choice' or c.type=='keybind' or c.type=='color'end
 function M.new(store,log,grouping)
-    local api={api=1,version='0.1.50',color_hex=M.color_hex,color_rgb=M.color_rgb,hsv_rgb=M.hsv_rgb,rgb_hsv=M.rgb_hsv,mods={},revision=0};log=log or function()end
+    local api={api=1,version='0.1.51',color_hex=M.color_hex,color_rgb=M.color_rgb,hsv_rgb=M.hsv_rgb,rgb_hsv=M.rgb_hsv,mods={},revision=0};log=log or function()end
+    api.storage_per_mod=true;api.presentation_links=true;api.text_swatches=true
     local palette=store and store.load('mcm_custom_palette') or {};local swatches={}
     for i=1,12 do local ok,v=pcall(M.color_hex,palette['swatch_'..i]);if ok then swatches[#swatches+1]=v end end
     function api.swatches()return copy(swatches)end
@@ -59,6 +60,8 @@ function M.new(store,log,grouping)
     end
     function api.register(spec)
         assert(type(spec)=='table','Expected mod definition');id(spec.id);plain(spec.name);if spec.parent_name then plain(spec.parent_name)end
+        local store=spec.storage or store
+        assert(not store or(type(store.load)=='function'and type(store.save)=='function'),'Invalid mod storage provider')
         assert(not api.mods[spec.id],'Mod already registered; unregister before replacing')
         local mod={id=spec.id,name=spec.name,parent_name=spec.parent_name,description=rich(spec.description or ''),pages={},categories={},controls={},values={},on_change=spec.on_change}
         local categories={}

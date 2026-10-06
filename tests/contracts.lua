@@ -37,7 +37,8 @@ test('callbacks are isolated after successful persistence',function()
  local logs={};local s=spec();s.pages[1].controls[1].on_change=function()error('intentional failure')end
  local notified=false;s.on_change=function(v,k,old)notified=v==false and k=='toggle' and old==true end
  local h=core.new(nil,function(v)logs[#logs+1]=v end).register(s)
- assert(h.set('toggle',false));assert(notified and #logs==1 and h.get('toggle')==false)
+ assert(h.set('toggle',false));assert(notified and h.get('toggle')==false)
+ local failures=0;for _,message in ipairs(logs)do if message:find('Callback failed',1,true)then failures=failures+1 end end;assert(failures==1)
 end)
 test('reset, late registration, unregister and replacement lifecycle',function()
  local api=core.new();local h=api.register(spec());h.set('slider',8);h.reset('slider');assert(h.get('slider')==5)

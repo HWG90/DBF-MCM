@@ -14,7 +14,7 @@ Live check: open with F10 after releasing mouse buttons. Move and click the curs
 
 ## Build
 
-Run `python native/build.py` with Visual Studio 2022 C++ tools installed, then `python build.py --install`. The installer copies the helper and manifest before atomically replacing the Lua entry point. Existing settings remain intact. Native source is included for inspection.
+Run `python native/build.py` with Visual Studio 2022 C++ tools installed, then build the packages with `build.ps1` and follow the selected loading route in [Installation](INSTALL-STANDALONE.md). Python installation is disabled. Preserve existing settings when switching providers. Native source is included for inspection.
 
 ## Restoration failures and loader handoff
 

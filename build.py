@@ -16,9 +16,16 @@ dist=ROOT/'dist/dbf_mcm';dist.mkdir(parents=True,exist_ok=True)
 native_name=(ROOT/'native/build/library.txt').read_text(encoding='utf-8').strip()
 shutil.copy2(ROOT/'native/build'/native_name,dist/native_name)
 (dist/'library.txt').write_text(native_name)
-with zipfile.ZipFile(ROOT/'dist/ModConfigurationMenu-Preview-0.1.50.zip','w',zipfile.ZIP_DEFLATED) as z:
+with zipfile.ZipFile(ROOT/'dist/ModConfigurationMenu-Preview-0.1.51.zip','w',zipfile.ZIP_DEFLATED) as z:
     z.write(dist/'mod.lua','dbf_mcm/mod.lua');z.writestr('dbf_mcm/settings/','')
     z.write(dist/native_name,'dbf_mcm/'+native_name);z.write(dist/'library.txt','dbf_mcm/library.txt')
-    for name in ['README.md','docs/API.md','docs/DIAGNOSTICS.md','docs/MCM-REFERENCE.md','docs/INPUT-CAPTURE.md','examples/example.lua','native/input_guard.c','native/build.py','native/test_input_guard.c']:
+    for name in ['README.md','docs/INSTALL-STANDALONE.md','docs/CREDITS.md','docs/RELEASE-0.1.51.md','docs/API.md','docs/DIAGNOSTICS.md','docs/MCM-REFERENCE.md','docs/INPUT-CAPTURE.md','examples/example.lua','native/input_guard.c','native/build.py','native/test_input_guard.c']:
         z.write(ROOT/name,name)
-print(ROOT/'dist/ModConfigurationMenu-Preview-0.1.50.zip')
+print(ROOT/'dist/ModConfigurationMenu-Preview-0.1.51.zip')
+
+# Same loose runtime, with an explicit LLL installation guide.
+with zipfile.ZipFile(ROOT/'dist/ModConfigurationMenu-Preview-0.1.51.zip') as original:
+    with zipfile.ZipFile(ROOT/'dist/DBF-MCM-LLL-0.1.51.zip','w',zipfile.ZIP_DEFLATED) as target:
+        for item in original.infolist(): target.writestr(item,original.read(item.filename))
+        target.write(ROOT/'docs/INSTALL-STANDALONE.md','INSTALL-LLL.md')
+print(ROOT/'dist/DBF-MCM-LLL-0.1.51.zip')

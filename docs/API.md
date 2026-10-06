@@ -99,3 +99,13 @@ When the original menu is absent, MCM provides API 1 register_option/get/set/on_
 # Diagnostics integration
 
 The shared read-only console contract is documented in [DIAGNOSTICS.md](DIAGNOSTICS.md).
+
+## Storage and presentation capabilities (0.1.51)
+
+`storage_per_mod`, `presentation_links` and `text_swatches` advertise these extensions. Registration can supply `storage={load=function(mod_id) ... end, save=function(mod_id,values) ... end}`. Save returns success or `false, reason`; the provider owns that mod's persistence across framework changes.
+
+A presentation control can set `source_mod_id` and `source_control_id` to route reads/writes to an existing registered control. Give the alias its own ID and compatible type/range. Missing references are omitted; disabled aliases reject writes. Keep the referenced provider registered.
+
+Display-only text controls can include `swatches={{rgb={255,128,0},row=1}, ...}`. Up to eight swatches render with stock rectangles/text and store no value.
+
+`focus_page(mod_id,page_id)` opens a registered page when the game is focused and returns success/error. `menu_binding_status()` exposes focus, active editors and the global F10 virtual key. Opening remains subject to capture/ownership checks.

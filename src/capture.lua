@@ -40,8 +40,8 @@ function M.new(native,window,log)
         return {owner=external and external.owner or (self.active and 'mcm' or (snapshot and 'mcm_restore' or nil)),active=self.active,pending_restore=snapshot~=nil and not self.active}
     end
     function self.sync(visible,focused,hwnd)
-        if visible and external then return false,'Input lease belongs to '..external.owner end
         if not visible or not focused then if self.active or snapshot then return self.release()end;return true end
+        if visible and external then return false,'Input lease belongs to '..external.owner end
         if snapshot and not self.active then return false,'Previous cursor restoration pending'end
         if not self.active then
             for _,name in ipairs({'mouse_focus','show_cursor','clip_cursor','set_mouse_focus','set_show_cursor','set_clip_cursor'})do

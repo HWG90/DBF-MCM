@@ -22,11 +22,13 @@ local function close()
     api,menu,input=nil,nil,nil;binding_host=nil;held_toggle=false
 end
 return {
-    name='Mod Configuration Menu (Preview)',version='0.1.50',author='Local development',
+    name='Mod Configuration Menu (Preview)',version='0.1.51',author='HWG90',
     description='Independent MCM-style author framework. F10 opens a keyboard/mouse preview. Not yet a native pause-menu replacement.',
     on_enable=function(ctx)
         assert(ctx.api==2 and type(ctx.global)=='function' and type(ctx.on_cleanup)=='function','MDL API 2 required')
         assert(not rawget(_G,'DBFMCM'),'Another DBFMCM instance is active')
+        local epic=package.loaded['dbf.epic_lut.frontend.v1']
+        if epic and epic.active then assert(epic.suspend(),'Epic LUT cursor restoration pending; MCM activation deferred')end
         local ffi=require('ffi');local bit=require('bit')
         pcall(ffi.cdef,[[
             typedef struct {long x;long y;} DBFMCM_POINT;
@@ -106,6 +108,14 @@ return {
             return ok,reason
         end
         function api.is_open()return menu.visible end
+        function api.menu_binding_status()return {focused=input.focused(),editing=menu.capture~=false or menu.text_edit~=nil or menu.color_picker~=nil,global_key=121}end
+        function api.focus_page(mod_id,page_id)
+            if not input.focused()then return false,'Game is not focused'end
+            for index,mod in ipairs(api.list())do if mod.id==mod_id then
+                for page_index,page in ipairs(mod.pages)do if page.id==page_id then menu.selected=index;menu.page=page_index;menu.row=1;menu.scroll=0;menu.focus='settings';menu.visible=true;return true end end
+            end end
+            return false,'Requested page unavailable'
+        end
         ctx.global('DBFMCM',api)
         legacy=MCM.legacy.new(api,ctx.log,MCM.core)
         registered=api.register(MCM.framework({example_action=function()ctx.log('MCM example action activated')end},MCM.authoring))
@@ -125,18 +135,18 @@ return {
             end
             -- Native binding action aliases can collide with game menu navigation.
             -- Use the physical F10 edge until an independent action is verified.
-            menu.tick(input)
+            local focused=input.focused()
+            if menu.input_focus(focused,input)then menu.tick(input)end
             if retired or not menu then return end
-            if menu.visible and not input.focused()then menu.visible=false;menu.capture=false end
             -- Release the manager before snapshotting game cursor flags.
             local loader=rawget(_G,'LiveLuaLoader')
-            if menu.visible and not capture.active and loader and type(loader.close_manager)=='function' then
+            if focused and menu.visible and not capture.active and loader and type(loader.close_manager)=='function' then
                 local released,why=loader.close_manager()
                 if released==false then menu.visible=false;ctx.log('MCM handoff refused: '..tostring(why))end
-            elseif menu.visible and not capture.active and loader and type(loader.open_manager)=='function' then
+            elseif focused and menu.visible and not capture.active and loader and type(loader.open_manager)=='function' then
                 menu.visible=false;ctx.log('MCM handoff refused: loader lacks safe close_manager API')
             end
-            local acquired,reason=capture.sync(menu.visible,input.focused(),input.window())
+            local acquired,reason=capture.sync(menu.visible,focused,input.window())
             if not acquired then menu.visible=false;menu.capture=false;capture.release();ctx.log('Menu closed: '..tostring(reason))end
             menu.advance(dt)
             local w,h=stingray.Gui.resolution();view.draw(menu.compose(w,h))
