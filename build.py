@@ -1,10 +1,13 @@
 """Bundle a standalone MDL API 2 mod; optional local installation only."""
 from pathlib import Path
 import argparse, shutil, os, zipfile
+from tools.runtime_guard import require_physical_runtime
+require_physical_runtime()
 ROOT=Path(__file__).resolve().parent
 parser=argparse.ArgumentParser();parser.add_argument('--install',action='store_true');args=parser.parse_args()
+if args.install:parser.error('Python installation is disabled. Build with build.ps1, then use the native PowerShell deploy.ps1 entrypoint.')
 parts=['local MCM={}\n']
-for name in ['core', 'store', 'menu', 'view', 'capture', 'compat', 'legacy', 'authoring', 'grouping', 'framework']:
+for name in ['core', 'store', 'console', 'menu', 'view', 'capture', 'compat', 'legacy', 'authoring', 'grouping', 'framework']:
     parts.append(f'MCM.{name}=(function()\n'+(ROOT/'src'/f'{name}.lua').read_text(encoding='utf-8')+'\nend)()\n')
 parts.append('return (function()\n'+(ROOT/'src/adapter.lua').read_text(encoding='utf-8')+'\nend)()\n')
 dist=ROOT/'dist/dbf_mcm';dist.mkdir(parents=True,exist_ok=True)
@@ -16,14 +19,6 @@ shutil.copy2(ROOT/'native/build'/native_name,dist/native_name)
 with zipfile.ZipFile(ROOT/'dist/ModConfigurationMenu-Preview-0.1.50.zip','w',zipfile.ZIP_DEFLATED) as z:
     z.write(dist/'mod.lua','dbf_mcm/mod.lua');z.writestr('dbf_mcm/settings/','')
     z.write(dist/native_name,'dbf_mcm/'+native_name);z.write(dist/'library.txt','dbf_mcm/library.txt')
-    for name in ['README.md','docs/API.md','docs/MCM-REFERENCE.md','docs/INPUT-CAPTURE.md','examples/example.lua','native/input_guard.c','native/build.py','native/test_input_guard.c']:
+    for name in ['README.md','docs/API.md','docs/DIAGNOSTICS.md','docs/MCM-REFERENCE.md','docs/INPUT-CAPTURE.md','examples/example.lua','native/input_guard.c','native/build.py','native/test_input_guard.c']:
         z.write(ROOT/name,name)
-if args.install:
-    target=Path(os.environ['LOCALAPPDATA'])/'MDL/Helldivers2/Mods/dbf_mcm'
-    (target/'settings').mkdir(parents=True,exist_ok=True)
-    if not (target/native_name).exists():shutil.copy2(dist/native_name,target/native_name)
-    shutil.copy2(dist/'library.txt',target/'library.txt')
-    shutil.copy2(dist/'mod.lua',target/'mod.lua.pending')
-    os.replace(target/'mod.lua.pending',target/'mod.lua')
-    print('Installed local MDL preview:',target)
 print(ROOT/'dist/ModConfigurationMenu-Preview-0.1.50.zip')

@@ -52,7 +52,7 @@ Start with [API documentation](docs/API.md) and the [working example](examples/e
 
 Definitions and saved values are separate. Settings live under `%LOCALAPPDATA%/MDL/Helldivers2/Mods/dbf_mcm/settings/<mod-id>.ini`; files contain plain scalar values and are never executed. Failed disk writes do not commit the new setting or fire callbacks. Keep IDs stable across releases.
 
-Read [input capture details and limitations](docs/INPUT-CAPTURE.md). Build: `python native/build.py`, then `python build.py`. Verify: `python tests/run.py`. The distributable ZIP contains the standalone MDL mod, documentation, and author example. No private testing payloads are included. Packaging does not establish public licensing, release readiness, or live-game validation.
+Read [input capture details and limitations](docs/INPUT-CAPTURE.md). Build Lua with `build.ps1 -Python <non-Store interpreter>`. Native helper changes require separate review; run native/test tools with a non-Store interpreter. For an existing authorized LLL installation, use `deploy.ps1 -Candidate <reviewed mod.lua>`; Python `--install` is disabled. See [physical deployment safeguards](docs/DEPLOYMENT-GUARDS.md). The distributable ZIP contains the standalone MDL mod, documentation, and author example. No private testing payloads are included. Packaging does not establish public licensing, release readiness, or live-game validation.
 
 ## Bingus compatibility
 

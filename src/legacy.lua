@@ -1,5 +1,16 @@
 -- Read the installed Lua registry; never replace the legacy registration API.
 local M={}
+local function group_name(key,source)
+ local value=type(key)=='string' and key or (source and (source.title or source.name or source.mod))
+ if type(value)=='function'then local ok,result=pcall(value);value=ok and result or nil end
+ if type(value)~='string'then value='Mod '..tostring(key)end
+ return value:gsub('[%c]',' '):sub(1,512)
+end
+local function group_keys(registry)
+ local keys={};for key in pairs(registry.mods)do keys[#keys+1]=key end
+ table.sort(keys,function(a,b)return group_name(a,registry.mods[a])<group_name(b,registry.mods[b])end)
+ return keys
+end
 local function state_of(host)
  if not host or host.api~=1 or type(host.register_option)~='function' or not debug or not debug.getupvalue then return end
  for i=1,40 do local name,value=debug.getupvalue(host.register_option,i);if not name then break end
@@ -10,7 +21,7 @@ function M.new(api,log,core)
  local self={};local owner,registry;local imported={};local revision=-1;local appearance_seen
  local function clear()if appearance_seen then appearance_seen.hidden=nil end;for _,id in ipairs(imported)do api.mods[id]=nil end;imported={};api.revision=api.revision+1 end
  function self.diagnostic()
-  local names={};for name in pairs(registry and registry.mods or {})do names[#names+1]=name end;table.sort(names)
+  local names={};for key,source in pairs(registry and registry.mods or {})do names[#names+1]=group_name(key,source)end;table.sort(names)
   local registered=0;for _ in pairs(registry and registry.options or {})do registered=registered+1 end
   local visible=0;for _,mod in pairs(api.mods)do if not mod.hidden then visible=visible+1 end end
   return 'host='..tostring(owner~=nil)..' compat='..tostring(owner and owner.mcm_compat==true)..' registry='..tostring(registry~=nil)..' options='..registered..' visible='..visible..' groups='..table.concat(names,', ')
@@ -28,11 +39,12 @@ function M.new(api,log,core)
   if revision==registry.revision and appearance==appearance_seen then return end
   appearance_seen=appearance
   clear();revision=registry.revision
-  local names={};for name in pairs(registry.mods)do names[#names+1]=name end;table.sort(names)
-  for index,name in ipairs(names)do
+  local names=group_keys(registry)
+  for index,source_key in ipairs(names)do
+   local source=registry.mods[source_key];local name=group_name(source_key,source)
    local direct_hud=appearance and appearance.name=='DBF-HUD'
    if not (direct_hud and (name=='DBF-HUD' or name=='DBF-HUD PLACEMENT' or name=='DBF-HUD LAYOUT EDITOR' or name=='DBF-HUD DEVELOPER')) then
-   local source=registry.mods[name];local controls={};local links={};local pending={}
+   local controls={};local links={};local pending={}
    for n,o in ipairs(source.order or {})do
     if (o.kind=='toggle' or o.kind=='slider' or o.kind=='choice') and not (name=='DBF-HUD' and appearance) then
      local key='option_'..n;local c={id=key,type=o.kind,label=o.label or o.id,description=o.description or '',default=o.default,min=o.min,max=o.max,step=o.step,choices=o.choices}

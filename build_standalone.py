@@ -1,6 +1,8 @@
 """Build the Shared Loader startup variant with an embedded native input library."""
 from pathlib import Path
 import argparse, importlib.util, subprocess, sys, ctypes, zipfile
+from tools.runtime_guard import require_physical_runtime
+require_physical_runtime()
 ROOT=Path(__file__).resolve().parent
 parser=argparse.ArgumentParser();parser.add_argument('--addon-builder',type=Path,required=True);args=parser.parse_args()
 subprocess.run([sys.executable,str(ROOT/'build.py')],check=True)

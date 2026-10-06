@@ -22,7 +22,7 @@ local descriptor=(function()
 -- __MODULE__
 end)()
 local cleanup,globals={},{}
-local ctx={api=2,dir=base}
+local ctx={api=2,dir=base,diagnostic_log_path=base..'/MCM-startup.log'}
 function ctx.log(message)local f=io.open(base..'/MCM-startup.log','a');if f then f:write(tostring(message),'\n');f:close()end end
 function ctx.global(name,value)globals[name]={previous=rawget(_G,name),owned=value};rawset(_G,name,value);return value end
 function ctx.on_cleanup(fn)cleanup[#cleanup+1]=fn end

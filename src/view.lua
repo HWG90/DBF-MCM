@@ -87,7 +87,7 @@ function M.new(sr,preview_only,diagnostic_log)
                     uniforms[uniform_key]=true
                 end
             end
-            if report_now and c.type=='text' then report[#report+1]=string.format('%d z=%.2f label=%q',index,z,c.text or '')end
+            if report_now and c.type=='text' and not c.diagnostic_console then report[#report+1]=string.format('%d z=%.2f label=%q',index,z,c.text or '')end
             if old and old.signature==signature then
                 ids[#ids+1]=old
             else
@@ -109,7 +109,7 @@ function M.new(sr,preview_only,diagnostic_log)
                 if c.font_resource then font,material=c.font_resource,c.font_material end
                 value=G.text(gui,c.text,font,c.size,material,sr.Vector3(c.x,c.y,z),color)
             end
-            if report_now and c.type=='text' then report[#report]=report[#report]..' allocation='..tostring(value)end
+            if report_now and c.type=='text' and not c.diagnostic_console then report[#report]=report[#report]..' allocation='..tostring(value)end
             if value then ids[#ids+1]={type=primitive_type,id=value,extra_id=extra_id,signature=signature,gui=target_gui}else ids[#ids+1]={type=c.type,id=nil,signature=nil}end
             end
         end

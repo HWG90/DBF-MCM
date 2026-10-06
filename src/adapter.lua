@@ -1,4 +1,5 @@
 local api,menu,view,registered,input,log,capture;local legacy;local diagnostic;local binding_host;local held_toggle=false;local retired=false
+local diagnostics,diagnostics_owner,log_context,original_log,mirror_log
 local function close()
     -- A failed external restore must keep its provider and snapshot available.
     if capture then
@@ -14,6 +15,10 @@ local function close()
     retired=true;if registered then registered.unregister();registered=nil end
     if view then view.release();view=nil end
     if api and rawget(_G,'DBFMCM')==api then rawset(_G,'DBFMCM',nil)end
+    if menu and menu.release_console then menu.release_console()end
+    if diagnostics_owner then diagnostics.detach(diagnostics_owner);diagnostics_owner=nil end
+    if log_context and log_context.log==mirror_log then log_context.log=original_log end
+    log_context,original_log,mirror_log=nil,nil,nil
     api,menu,input=nil,nil,nil;binding_host=nil;held_toggle=false
 end
 return {
@@ -40,7 +45,21 @@ return {
         ]])
         local user=ffi.load('user32');local kernel=ffi.load('kernel32');local process=kernel.dbfmcm_process()
         local point=ffi.new('DBFMCM_POINT[1]');local rect=ffi.new('long[4]');local foreground_process=ffi.new('unsigned long[1]')
-        local sr=assert(rawget(_G,'stingray'),'Stingray unavailable');log=ctx.log;retired=false
+        local sr=assert(rawget(_G,'stingray'),'Stingray unavailable');retired=false
+        diagnostics=MCM.console.shared()
+        local loader=rawget(_G,'LiveLuaLoader')
+        local path=ctx.diagnostic_log_path or (loader and loader.log_directory and loader.log_directory..'/LiveLuaLoader.log')
+        diagnostics_owner=diagnostics.attach('MCM',path)
+        log_context=ctx;original_log=ctx.log
+        mirror_log=function(message)
+            local current=rawget(_G,'LiveLuaLoader')
+            if not (current and current.diagnostics==diagnostics)then pcall(diagnostics.record,'MCM',message,nil,nil,path)end
+            if original_log then
+                local ok,why=pcall(original_log,message)
+                if not ok then pcall(diagnostics.record,'MCM','Log sink failed','error',tostring(why),path)end
+            end
+        end
+        ctx.log=mirror_log;log=mirror_log
         ctx.on_cleanup(close)
         local native_file=assert(io.open(ctx.dir..'/library.txt','rb'),'Native capture manifest missing')
         local native_name=native_file:read('*a'):match('^(mcm_input_%x+%.dll)%s*$');native_file:close()
@@ -54,7 +73,9 @@ return {
             package.loaded['dbf_mcm.compat_registry']=registry -- Shared storage is not an MDL-owned global.
             ctx.global('ModOptionsMenu',compat);ctx.log('MCM provides ModOptionsMenu API 1 compatibility')
         end
-        api=MCM.core.new(storage,ctx.log,MCM.grouping);MCM.authoring.install(api);view=MCM.view.new(sr,nil,ctx.log);menu=MCM.menu.new(api,view.measure)
+        api=MCM.core.new(storage,ctx.log,MCM.grouping);MCM.authoring.install(api)
+        api.diagnostics=diagnostics;api.diagnostics_surface=MCM.console.surface
+        view=MCM.view.new(sr,nil,ctx.log);menu=MCM.menu.new(api,view.measure)
         input={}
         local foreground
         function input.down(code)return foreground and bit.band(tonumber(user.dbfmcm_key(code)),0x8000)~=0 or false end
@@ -78,6 +99,7 @@ return {
         function api.open()menu.visible=true end
         function api.close()
             menu.visible=false;menu.capture=false
+            if menu.release_console then menu.release_console()end
             local ok,reason=true,nil
             if capture then ok,reason=capture.release()end
             if view then view.release()end

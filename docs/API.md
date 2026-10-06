@@ -41,6 +41,8 @@ Registration restores persisted values but **does not fire callbacks**. Read `ha
 
 After a successful save, the value is committed and callbacks run independently. A callback error is logged; it does not undo the committed setting. Use `validate` for rejecting values. Callbacks should be idempotent and must not assume notification means a gameplay mutation succeeded. Dynamic dependencies and transactions will need separate contracts before the public API is stabilized.
 
+`handle.set_many({setting_id=value, ...})` validates a complete settings batch, saves once, then publishes values and invokes callbacks. Invalid settings or a failed save leave every value unchanged and invoke no callbacks. Callback failures retain the saved commit, as with `set`. This supports atomic preset imports; it does not make native/game operations transactional.
+
 `DBFMCM.list()` returns all currently registered mods sorted by display name then ID. `DBFMCM.get(mod_id, setting_id)` and `set` forward to its handle. `open()`, `close()`, `is_open()` control the preview. The registry has no eight-mod limit. Definitions must currently be Lua tables; JSON discovery is planned.
 
 ## Compatibility boundaries
@@ -94,3 +96,6 @@ Select a custom swatch (outlined in yellow), edit its color, then click REPLACE 
 ## ModOptionsMenu compatibility
 
 When the original menu is absent, MCM provides API 1 register_option/get/set/on_change/ready for toggles, choices and sliders. Its shared registry survives MCM reloads. Legacy registration limits are expanded. Translation functions resolve at registration; full dynamic translation parity is not yet verified. Existing original-menu settings are not automatically migrated. Test each mod live. Restart the game if registrations were already lost before the preservation fix.
+# Diagnostics integration
+
+The shared read-only console contract is documented in [DIAGNOSTICS.md](DIAGNOSTICS.md).

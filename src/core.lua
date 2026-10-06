@@ -131,12 +131,12 @@ function M.new(store,log,grouping)
             if c.validate then assert(c.validate(value)~=false,'Value rejected by mod')end
             if value==mod.values[key]then return true end
             local next_values=copy(mod.values);next_values[key]=value
-            if store then local ok,err=store.save(mod.id,next_values);if not ok then return false,err end end
+            if store then local ok,err=store.save(mod.id,next_values);if not ok then log('Save failed for '..mod.id..'.'..key..': '..tostring(err));return false,err end end
             local old=mod.values[key];mod.values=next_values
             for _,callback in ipairs({c.on_change or false,mod.on_change or false})do
                 if callback then local ok,err=pcall(callback,value,key,old);if not ok then log('Callback failed for '..mod.id..'.'..key..': '..tostring(err))end end
             end
-            api.revision=api.revision+1;return true
+            api.revision=api.revision+1;log('Setting committed: '..mod.id..'.'..key);return true
         end
         function handle.preview(key)
             local c=assert(mod.controls[key],'Unknown control');local pending=c.page.pending
@@ -171,7 +171,7 @@ function M.new(store,log,grouping)
                 end
                 if p.actions[c.id] then assert(not c.disabled,'Action disabled')end
             end
-            if #changes>0 and store then local ok,err=store.save(mod.id,next_values);if not ok then return false,err end end
+            if #changes>0 and store then local ok,err=store.save(mod.id,next_values);if not ok then log('Save failed for '..mod.id..'/'..p.id..': '..tostring(err));return false,err end end
             mod.values=next_values;p.pending={}
             for _,change in ipairs(changes)do
                 for _,callback in ipairs({change.c.on_change or false,mod.on_change or false})do
@@ -179,15 +179,39 @@ function M.new(store,log,grouping)
                 end
             end
             local actions=p.actions;p.actions={};api.revision=api.revision+1
+            if #changes>0 then log('Page committed: '..mod.id..'/'..p.id..' ('..#changes..' settings)')end
             local messages={}
             for _,c in ipairs(p.controls)do if actions[c.id]then local ok,result=handle.activate(c.id);if not ok then return false,result end;if type(result)=='string' and #result>0 then messages[#messages+1]=result end end end
             return true,#messages>0 and table.concat(messages,'; ') or nil
+        end
+        -- Validate and persist a complete import before publishing any values or callbacks.
+        function handle.set_many(values)
+            assert(api.mods[mod.id]==mod,'Retired registration')
+            assert(type(values)=='table','Settings table required')
+            local next_values=copy(mod.values);local changes={};local keys={}
+            for key in pairs(values)do keys[#keys+1]=key end;table.sort(keys)
+            for _,key in ipairs(keys)do
+                local c=assert(mod.controls[key],'Unknown control');assert(stored(c) and not c.disabled,'Setting unavailable')
+                local value=normalize(c,values[key]);if c.validate then assert(c.validate(value)~=false,'Value rejected by mod')end
+                if value~=mod.values[key]then next_values[key]=value;changes[#changes+1]={c=c,key=key,v=value,old=mod.values[key]}end
+            end
+            if #changes==0 then return true end
+            if store then local ok,err=store.save(mod.id,next_values);if not ok then return false,err end end
+            mod.values=next_values
+            for _,change in ipairs(changes)do
+                for _,callback in ipairs({change.c.on_change or false,mod.on_change or false})do
+                    if callback then local ok,err=pcall(callback,change.v,change.key,change.old);if not ok then log('Callback failed: '..tostring(err))end end
+                end
+            end
+            api.revision=api.revision+1;log('Settings batch committed: '..mod.id..' ('..#changes..' settings)');return true
         end
         function handle.reset(key)return handle.set(key,assert(mod.controls[key],'Unknown control').default)end
         function handle.activate(key)
             assert(api.mods[mod.id]==mod,'Retired registration')
             local c=assert(mod.controls[key],'Unknown control');assert(c.type=='button' and not c.disabled,'Button unavailable')
-            return pcall(c.on_activate)
+            local ok,result=pcall(c.on_activate)
+            log((ok and 'Action completed: 'or 'Action failed: ')..mod.id..'.'..key..(not ok and (': '..tostring(result))or ''))
+            return ok,result
         end
         function handle.unregister()if api.mods[mod.id]==mod then api.mods[mod.id]=nil;api.revision=api.revision+1 end end
         mod.handle=handle;return handle
