@@ -29,7 +29,7 @@ local function close()
     api,menu,input=nil,nil,nil;binding_host=nil;held_toggle=false
 end
 return {
-    name='Mod Configuration Menu (Preview)',version='0.1.54',author='HWG90',
+    name='Mod Configuration Menu (Preview)',version='0.1.55',author='HWG90',
     description='Shared mod settings. DEL opens MCM; a guarded MCM tab also opens it from the Escape menu.',
     on_enable=function(ctx)
         assert(ctx.api==2 and type(ctx.global)=='function' and type(ctx.on_cleanup)=='function','MDL API 2 required')

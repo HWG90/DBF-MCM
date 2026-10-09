@@ -265,19 +265,34 @@ function MODULE.install(context)
                     end
                 else display[#display+1]={control=control,label=control.label or '',row=ordinal}end
             end
-            self.display_total=#display
-            if not state.manual_scroll and selected and selected_at<=self.scroll then self.scroll=selected_at-1 end
-            if not state.manual_scroll and selected and selected_at>self.scroll+settings_visible then self.scroll=selected_at-settings_visible end
-            self.scroll=math.max(0,math.min(self.scroll,math.max(0,#display-settings_visible)))
-            local columns={0,0}
+            -- Both columns share a viewport offset, but each has its own row
+            -- positions. Clipping a flat registration slice drops entire columns.
+            local columns={0,0};local selected_column=1
+            for _,entry in ipairs(display)do
+                local col=compact and 1 or (entry.control.column or 1)
+                columns[col]=columns[col]+1
+                entry.column,entry.line=col,columns[col]
+                if entry.control==selected then selected_at=entry.line;selected_column=col end
+            end
+            self.display_total=math.max(columns[1],columns[2])
+            local function column_offset(col)
+                -- A shorter column stops at its final viewport instead of
+                -- disappearing while the other column continues scrolling.
+                return math.min(self.scroll,math.max(0,columns[col]-settings_visible))
+            end
+            local selected_offset=column_offset(selected_column)
+            if not state.manual_scroll and selected and selected_at<=selected_offset then self.scroll=selected_at-1 end
+            if not state.manual_scroll and selected and selected_at>selected_offset+settings_visible then self.scroll=selected_at-settings_visible end
+            self.scroll=math.max(0,math.min(self.scroll,math.max(0,self.display_total-settings_visible)))
             for i,entry in ipairs(display)do
                 local c=entry.control
+                local offset=column_offset(entry.column)
 
-                if i>self.scroll and i<=self.scroll+settings_visible then
+                if entry.line>offset and entry.line<=offset+settings_visible then
 
-                    local col=compact and 1 or (c.column or 1);columns[col]=columns[col]+1
+                    local col=entry.column
 
-                    local x=settings_x+(col-1)*(available/2);local y=wh-197-(columns[col]-1)*42;local row_index=entry.row
+                    local x=settings_x+(col-1)*(available/2);local y=wh-197-(entry.line-offset-1)*42;local row_index=entry.row
 
                     local row_hover=not self.dropdown and not self.color_picker and hovering(x-5,y-7,row_width+5,34)
                     text_focus=c==selected and self.focus=='settings'
@@ -485,7 +500,7 @@ function MODULE.install(context)
             end
 
             text_focus=false
-            scrollbar('settings',ww-20,196,wh-364,#display,settings_visible,self.scroll)
+            scrollbar('settings',ww-20,196,wh-364,self.display_total,settings_visible,self.scroll)
 
             -- The scrollbar communicates position without debug row counts.
 

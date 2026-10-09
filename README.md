@@ -2,7 +2,7 @@
 
 # DBF-MCM
 
-**Diver's Best Friend — Mod Configuration Menu**, preview **0.1.54**.
+**Diver's Best Friend — Mod Configuration Menu**, preview **0.1.55**.
 A shared in-game settings menu for Helldivers 2 mods.
 
 [Downloads](https://github.com/HWG90/DBF-MCM/releases) | [Installation](docs/INSTALL-STANDALONE.md) | [Mod author quick start](docs/AUTHOR-GUIDE.md) | [API](docs/API.md) | [Credits](docs/CREDITS.md)
@@ -10,6 +10,8 @@ A shared in-game settings menu for Helldivers 2 mods.
 ## UI polish pass
 
 Clearer page headings, quieter panels and borders, more space between settings, distinct hover/focus/enabled colors, readable key names and better Apply feedback. Enter opens dropdowns, scrollbars can be dragged, and long labels scroll only while hovered or focused. Hovering never changes a setting.
+
+Two-column settings pages keep their controls in the correct column while scrolling. Shorter columns stop at their final rows while the longer column continues, including fully expanded Epic LUT settings.
 
 **Settings** sits beside Mod Configuration. It contains the rebindable Open/Close shortcut, preferred window width/height, UI scale, font size, Reset Window and **GitHub Page**, which opens this repository in your browser after releasing menu input.
 
@@ -21,8 +23,8 @@ Choose one package and one MCM instance.
 
 | Package | Loading route |
 | --- | --- |
-| `ModConfigurationMenu-Preview-0.1.54.zip` | **MDL API 2 or LLL**. Extract the complete `dbf_mcm` folder into the selected loader's Mods directory. |
-| `DBF-MCM-Standalone-0.1.54.zip` | **Bingus Shared Loader v15+ / API 1**. Import into Arsenal, enable alongside Shared Loader, deploy and restart. |
+| `ModConfigurationMenu-Preview-0.1.55.zip` | **MDL API 2 or LLL**. Extract the complete `dbf_mcm` folder into the selected loader's Mods directory. |
+| `DBF-MCM-Standalone-0.1.55.zip` | **Bingus Shared Loader v15+ / API 1**. Import into Arsenal, enable alongside Shared Loader, deploy and restart. |
 
 LLL uses the same loose package as MDL; it does not need a separate download or MDL installed. Keep `mod.lua`, `library.txt` and the named DLL together. Disable the previous MCM provider before switching. Bingus Mod Options Menu is optional. Native DLL updates require a restart.
 
@@ -36,7 +38,7 @@ Source is organized into registration/storage, preferences, controller, input, r
 
 ## Validation and limits
 
-Offline contracts, native policy checks, package compilation and integrity checks pass. Exact startup, fonts, cursor behavior and appearance still need live verification for each route. See [release notes](docs/RELEASE-0.1.53.md).
+Offline contracts, native policy checks, package compilation and integrity checks pass. Exact startup, fonts, cursor behavior and appearance still need live verification for each route. See [release notes](docs/RELEASE-0.1.55.md).
 
 HUD+ 0.2.2 integration exposes 41 settings in three pages through a locally prepared owner bridge. Changes use HUD+'s existing settings file and apply methods. Its original code and assets stay in your HUD+ installation; see [integration setup](docs/INTEGRATIONS.md).
 
