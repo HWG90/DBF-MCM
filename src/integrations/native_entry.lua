@@ -15,6 +15,11 @@ local CALLS={
     tab_switch={0x1474370,hex('48895c2408574883ec508b41088bda488bf9'),'void (*)(uintptr_t,int32_t)',hex('ffffffff00ffffffffffffff00ffffffffff')},
     tab_select={0x17abfc0,hex('48895c240848896c24104889742418574883ec204863816ce00000'),'void (*)(uintptr_t,int32_t,uint8_t,uint8_t)',hex('ffffffff00ffffffff00ffffffff00ffffffffffffffff00000000')}
 }
+-- BetterLobbyManagement's verified GAME-tab Escape path, same pinned build.
+local CLOSE_CODE={
+    {0x18fa514,hex('488b1d0d29b8014c8d055af89c004533')},
+    {0x18fa53f,hex('488b83884300004885c07410c6401001')}
+}
 local function signature_matches(actual,expected,mask)
     if type(actual)~='string'or #actual~=#expected then return false end
     if not mask then return actual==expected end
@@ -74,6 +79,9 @@ function N.windows(options)
             if not signature_matches(read_bytes(base+entry[1],#entry[2]),entry[2],entry[4])then return false,'Native '..name..' signature changed'end
             native[name]=ffi.cast(entry[3],base+entry[1])
         end
+        for _,entry in ipairs(CLOSE_CODE)do
+            if read_bytes(base+entry[1],#entry[2])~=entry[2]then return false,'Native Escape close layout changed'end
+        end
         for index,label in ipairs(LABELS)do
             if get32(base+0x33114d0+(index-1)*4)~=label then return false,'Native tab labels changed'end
         end
@@ -130,6 +138,20 @@ function N.windows(options)
         assert(index>=0 and index<snapshot.count and shown>=0 and shown<=2,'Previous native selection unavailable')
         live(screen);native.tab_switch(screen,shown)
         live(screen);native.tab_select(screen+L.bar,index,0,0)
+    end
+    function self.request_close(screen,index)
+        local snapshot=self.snapshot(screen)
+        if type(index)~='number'or index%1~=0 or index<3 or index>=snapshot.count or snapshot.current~=index or snapshot.labels[index+1]~=L.template or not self.owns(screen,index)then return false,'Native MCM close ownership changed'end
+        local content=screen+3010456
+        if get8(content+1319449)~=0 then return false,'Apply or discard native settings before opening MCM'end
+        if get32(content+1296040+19752)==2 then return false,'Close the native dialog before opening MCM'end
+        local ui=get_pointer(base+0x347ce28);local main=ui and get_pointer(ui+0x4388)
+        if not main or not memory.writable_data(main+16,1)then return false,'Native Escape presenter is not writable'end
+        local pending=get8(main+16)
+        if pending~=0 then return false,'Native Escape is already closing'end
+        live(screen);put8(main+16,1)
+        if get8(main+16)~=1 then return false,'Native Escape close request readback failed'end
+        return true
     end
     return self
 end
@@ -205,7 +227,7 @@ end
 
 function N.new(api,options)
     options=options or {};local env=options.env or _G
-    local self={};local backend,verified,retired,retiring,record,parent,gameplay,wrapper,previous
+    local self={};local backend,verified,retired,retiring,record,parent,gameplay,wrapper,previous,pending_close
     local bridge,hud_bridge;local hud_wait=false;local last_reason;local last_mom_scan,last_mom_detail;local last_state;local last_selection
     local function note(reason)if reason~=last_reason then last_reason=reason;if options.log then options.log('MCM native entry: '..tostring(reason))end end end
     local function initialize()
@@ -349,6 +371,30 @@ function N.new(api,options)
         local result={focus=window.mouse_focus(),cursor=window.show_cursor(),clip=window.clip_cursor()}
         if type(result.focus)=='boolean'and type(result.cursor)=='boolean'and type(result.clip)=='boolean'then return result end
     end
+    local function can_detach()
+        if type(options.can_open)~='function'then return false,'Native MCM close preflight unavailable'end
+        return options.can_open()
+    end
+    local function complete_detach(token)
+        local current=flags()
+        if not current or not current.focus or current.cursor then return false,'Waiting for gameplay cursor state after Escape closes'end
+        local ready,reason=can_detach();if ready~=true then return false,reason or 'MCM detached opening refused'end
+        local proof={screen=token.screen,index=token.index,gameplay_snapshot=copy(current),active=true}
+        function proof.validate()
+            if not proof.active or not focused()then return false end
+            if select(2,backend.escape_menu())~='closed'then return false end
+            local actual=flags();if not actual then return false end
+            for _,key in ipairs({'focus','cursor','clip'})do if actual[key]~=proof.gameplay_snapshot[key]then return false end end
+            return true
+        end
+        if not proof.validate()then return false,'Native Escape closure proof changed'end
+        local called,opened,why=pcall(options.on_detached,proof);proof.active=false
+        if not called then return false,'MCM detached opening failed: '..tostring(opened)end
+        if opened~=true then return false,why or 'MCM detached opening refused'end
+        gameplay=current
+        if options.log then options.log('MCM opened after native Escape closed')end
+        return true
+    end
     local function make_parent(screen,snapshot)
         local result={screen=screen,index=record.index,previous_index=record.previous,
             restoration_snapshot=flags(),gameplay_snapshot=copy(gameplay),active=true}
@@ -380,6 +426,29 @@ function N.new(api,options)
         local screen,status=backend.escape_menu()
         local transition=status..'/mods='..tostring(bridge~=nil)..'/hud='..tostring(hud_bridge~=nil)..'/slot='..tostring(hud_bridge and hud_bridge.instance.slot)
         if transition~=last_state then last_state=transition;if options.log then options.log('MCM native entry: '..transition)end end
+        if pending_close then
+            local token=pending_close
+            if not focused()then pending_close=nil;note('Native Escape close handoff cancelled: game lost focus');return false,'Native Escape close handoff cancelled'end
+            token.frames=token.frames+1
+            if status=='covered'or(status=='open'and screen~=token.screen)then
+                pending_close=nil;note('Native Escape close handoff cancelled: owner covered or replaced');return false,'Native Escape owner changed during close'
+            end
+            if status=='closed'then
+                record=nil;parent=nil
+                local current=flags()
+                if current and current.focus and not current.cursor then
+                    pending_close=nil
+                    local okay,why=complete_detach(token);if not okay then note(why)end
+                    return okay,why
+                end
+            elseif status=='open'then
+                local snapshot=backend.snapshot(screen)
+                if not own(screen,snapshot)or snapshot.current~=token.index then pending_close=nil;note('Native Escape close handoff cancelled: tab ownership changed');return false,'Native MCM tab changed during close'end
+            end
+            local limit=math.max(1,math.min(600,math.floor(tonumber(options.dismiss_timeout_frames)or 120)))
+            if token.frames>=limit then pending_close=nil;note('Native Escape close handoff timed out');return false,'Native Escape close handoff timed out'end
+            return true,'Waiting for native Escape to close'
+        end
         if status=='closed'then
             record=nil;parent=nil
             if focused()and not(api.is_open and api.is_open())then local current=flags();if current and current.focus and not current.cursor then gameplay=current end end
@@ -401,6 +470,14 @@ function N.new(api,options)
             record.logged=true;note('Added owned native MCM tab: index='..record.index..' count='..snapshot.count)
         end
         if focused()and snapshot.current==record.index and not parent and not(api.is_open and api.is_open())then
+            if options.dismiss_escape==true then
+                if type(options.on_detached)~='function'or type(backend.request_close)~='function'then return false,'Native Escape detached handoff unavailable'end
+                local ready,why=can_detach();if ready~=true then note(why or 'Native MCM closing refused');return false,why end
+                local requested,reason=backend.request_close(screen,record.index)
+                if requested~=true then note(reason or 'Native Escape close request refused');return false,reason end
+                pending_close={screen=screen,index=record.index,frames=0}
+                note('Requested native Escape close before MCM');return true
+            end
             if not gameplay then note('Waiting for a verified gameplay cursor baseline');return false,'Gameplay cursor baseline unavailable'end
             local owner=make_parent(screen,snapshot)
             if not owner.validate()then note('Native MCM parent validation failed');return false,'Native MCM parent validation failed'end
@@ -413,10 +490,11 @@ function N.new(api,options)
         return true
     end
     function self.status()
-        return {verified=verified==true,installed=wrapper~=nil,retired=retired==true,retiring=retiring==true,index=record and record.index,gameplay_baseline=gameplay~=nil,parent=parent,reason=last_reason,mom_scan=last_mom_detail}
+        return {verified=verified==true,installed=wrapper~=nil,retired=retired==true,retiring=retiring==true,index=record and record.index,gameplay_baseline=gameplay~=nil,parent=parent,reason=last_reason,mom_scan=last_mom_detail,pending_close=pending_close~=nil}
     end
     function self.close()
         retiring=true
+        pending_close=nil
         if parent then local ok,why=parent.on_close();if not ok then return false,why end end
         if verified then local ok,why=remove();if not ok then return false,why end end
         retired=true

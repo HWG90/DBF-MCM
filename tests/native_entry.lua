@@ -12,7 +12,7 @@ local function stripped(fn)
     assert(select(1,debug.getupvalue(loaded,1))=='','fixture did not strip upvalue names')
     return loaded
 end
-local function fixture(extra_tabs,with_mom)
+local function fixture(extra_tabs,with_mom,extra_options)
     local b={phase='closed',screen=0x100000,count=with_mom and 4 or 3,current=2,shown=2,
         labels={0xd876b36e,0x78934e12,0x8c02bd80},owners={},writes=0,verifications=0,snapshot_reads=0,game_counts={},mom_counts={}}
     if with_mom then b.labels[4]=L.template;b.owners[3]='MODS'end
@@ -34,6 +34,11 @@ local function fixture(extra_tabs,with_mom)
     function b.show_text(screen,index)assert(screen==b.screen);b.owners[index]='MCM';b.writes=b.writes+1 end
     function b.owns(screen,index)return screen==b.screen and b.owners[index]=='MCM'end
     function b.restore_selection(screen,index,shown)assert(screen==b.screen);b.current=index;b.shown=shown;b.writes=b.writes+1 end
+    function b.request_close(screen,index)
+        assert(screen==b.screen and b.current==index and b.owners[index]=='MCM')
+        if b.request_refused then return false,b.request_refused end
+        b.close_requests=(b.close_requests or 0)+1;b.close_requested=true;return true
+    end
     local flags={focus=true,cursor=false,clip=true}
     local window={mouse_focus=function()return flags.focus end,show_cursor=function()return flags.cursor end,clip_cursor=function()return flags.clip end}
     local opened=false;local api={is_open=function()return opened end};local env={};local parent
@@ -58,9 +63,11 @@ local function fixture(extra_tabs,with_mom)
         local previous_update=game
         env.update=function(...)step();return previous_update(...)end
     else env.update=game end
-    local entry=Native.new(api,{backend=b,window=window,env=env,focused=function()return b.foreground~=false end,hud_menu=function()return b.hud_menu,b.hud_initializing end,on_open=function(owner)
+    local options={backend=b,window=window,env=env,focused=function()return b.foreground~=false end,hud_menu=function()return b.hud_menu,b.hud_initializing end,on_open=function(owner)
         assert(owner.validate());parent=owner;opened=true;return true
-    end})
+    end}
+    for key,value in pairs(extra_options or {})do options[key]=value end
+    local entry=Native.new(api,options)
     return {entry=entry,b=b,flags=flags,window=window,env=env,api=api,parent=function()return parent end,
         set_open=function(value)opened=value end,open_escape=function()b.phase='open';flags.focus=false;flags.cursor=true;flags.clip=false end}
 end
@@ -325,6 +332,52 @@ test('a replacement Escape owner releases DLL input but retains pending flags un
     assert(not parent.active and f.entry.close())
 end)
 
+test('dismiss handoff opens once only after actual closure and fresh gameplay flags',function()
+    local f,opens,saved_proof=nil,0,nil
+    f=fixture(0,true,{dismiss_escape=true,can_open=function()return true end,
+        on_open=function()error('hosted input must not open while dismissal is pending')end,
+        on_detached=function(proof)
+            assert(proof.validate()and proof.gameplay_snapshot.focus and not proof.gameplay_snapshot.cursor and proof.gameplay_snapshot.clip==false)
+            opens=opens+1;saved_proof=proof;f.set_open(true);return true
+        end})
+    assert(f.entry.install());f.entry.step();f.open_escape();f.entry.step();f.b.current=f.entry.status().index
+    local before=copy(f.flags);assert(f.entry.step()and f.entry.status().pending_close and f.b.close_requests==1 and opens==0)
+    for index=1,4 do assert(f.entry.step())end
+    assert(f.b.close_requests==1 and opens==0,'pending close repeated the native write or opened input early')
+    for key,value in pairs(before)do assert(f.flags[key]==value,'dismiss request fabricated cursor flags')end
+    f.b.phase='closed';assert(f.entry.step()and opens==0 and f.entry.status().pending_close,'closed stack with stale native flags opened input')
+    f.flags.focus=true;f.flags.cursor=false;f.flags.clip=false
+    assert(f.entry.step()and opens==1 and not f.entry.status().pending_close and f.entry.status().index==nil)
+    assert(not saved_proof.validate(),'detached closure proof remained reusable after callback')
+    f.entry.step();assert(opens==1 and f.b.close_requests==1);assert(f.entry.close())
+end)
+
+test('dismiss preflight and native draft refusal preserve the native menu without acquiring input',function()
+    local ready=false;local f=fixture(0,true,{dismiss_escape=true,can_open=function()return ready,'other frontend owns input'end,on_detached=function()error('refused close opened MCM')end})
+    assert(f.entry.install());f.entry.step();f.open_escape();f.entry.step();f.b.current=f.entry.status().index
+    local okay,why=f.entry.step();assert(not okay and why=='other frontend owns input'and not f.b.close_requests and not f.entry.status().pending_close)
+    ready=true;f.b.request_refused='Apply or discard native settings before opening MCM'
+    okay,why=f.entry.step();assert(not okay and why==f.b.request_refused and not f.b.close_requests and not f.entry.status().pending_close)
+    assert(f.flags.focus==false and f.flags.cursor==true and not f.api.is_open());assert(f.entry.close())
+end)
+
+test('dismiss coverage replacement timeout and foreground loss cancel without undoing native request',function()
+    for _,kind in ipairs({'covered','replaced','timeout','background','cleanup'})do
+        local f=fixture(0,true,{dismiss_escape=true,dismiss_timeout_frames=2,can_open=function()return true end,on_detached=function()error('cancelled dismissal opened MCM')end})
+        assert(f.entry.install());f.entry.step();f.open_escape();f.entry.step();f.b.current=f.entry.status().index;assert(f.entry.step())
+        if kind=='covered'then f.b.phase='covered'
+        elseif kind=='replaced'then f.b.screen=f.b.screen+0x10000
+        elseif kind=='background'then f.b.foreground=false end
+        if kind=='cleanup'then assert(f.entry.close())
+        else
+            if kind=='timeout'then assert(f.entry.step())end
+            assert(f.entry.step()==false)
+        end
+        assert(not f.entry.status().pending_close and f.b.close_requested and f.b.close_requests==1 and not f.api.is_open())
+        f.b.phase='closed';f.b.foreground=true;assert(f.entry.close())
+    end
+end)
+
 test('native capacity and base labels are checked before writes',function()
     local f=fixture(4,true);assert(f.entry.install());f.entry.step();f.open_escape()
     local ok,why=f.entry.step();assert(not ok and why=='Native tab bar is full'and f.b.writes==0)
@@ -357,8 +410,8 @@ test('cleanup preserves newer update wrappers and retired native work becomes in
 end)
 
 test('real Windows backend verifies prologues and uses native tab/text calls on guarded objects',function()
-    local base,ui,menu,screen=0x10000000,0x20000000,0x30000000,0x40000000
-    local bytes,calls={},{}
+    local base,ui,menu,screen,main=0x10000000,0x20000000,0x30000000,0x40000000,0x60000000
+    local bytes,calls={},{};local presenter_writable,ignore_close_write=true,false
     local function put32(address,value)for index=0,3 do bytes[address+index]=value%256;value=math.floor(value/256)end end
     local function put64(address,value)put32(address,value);put32(address+4,0)end
     local function get32(address)return (bytes[address]or 0)+(bytes[address+1]or 0)*256+(bytes[address+2]or 0)*65536+(bytes[address+3]or 0)*16777216 end
@@ -368,7 +421,9 @@ test('real Windows backend verifies prologues and uses native tab/text calls on 
         [0x143bf90]='\x48\x83\xec\x28\x4c\x8b\xd9\x39\x91\x10\x01\x00\x00\x0f\x84\x80',
         [0x143c950]='\x40\x53\x48\x83\xec\x20\x48\x8b\xd9\x48\x81\xc1\x10\x01\x00\x00',
         [0x1474370]=hex('48895c2408574883ec508b41088bda488bf9'),
-        [0x17abfc0]=hex('48895c240848896c24104889742418574883ec204863816ce00000')}
+        [0x17abfc0]=hex('48895c240848896c24104889742418574883ec204863816ce00000'),
+        [0x18fa514]=hex('488b1d0d29b8014c8d055af89c004533'),
+        [0x18fa53f]=hex('488b83884300004885c07410c6401001')}
     assert(#signatures[0x1474370]==18 and #signatures[0x17abfc0]==27)
     -- Only masked displacement/stack bytes differ from the verified reference.
     signatures[0x1474370]=signatures[0x1474370]:sub(1,4)..'\x7f'..signatures[0x1474370]:sub(6)
@@ -377,11 +432,12 @@ test('real Windows backend verifies prologues and uses native tab/text calls on 
         put32(base+0x33114d0+(index-1)*4,label);put32(screen+L.bar+L.labels+(index-1)*4,label)
     end
     put64(base+0x347ce28,ui);put64(base+0x347ce38,menu);put64(menu+200,screen)
+    put64(ui+0x4388,main);bytes[main+16]=0
     put32(ui+0x429c,1);put32(ui+0x429c+20,1)
     put32(screen+L.bar+L.count,3);put32(screen+L.bar+L.current,0);put32(screen+L.shown,0)
     local memory={verify_build=function(build)assert(build.exe_sha256==Native.build.exe_sha256 and build.game_sha256==Native.build.game_sha256);return true end,
         module=function(name)assert(name=='game.dll');return base end,address=function(value)return value end,
-        writable_data=function(address,size)return address>=screen and address+size<=screen+L.bar+L.count+8 end,
+        writable_data=function(address,size)return (presenter_writable and address==main+16 and size==1)or(address>=screen and address+size<=screen+L.bar+L.count+8)end,
         read=function(address,size)
             assert(type(address)=='table'and address.read_pointer,'native reader requires a typed pointer')
             address=address.address
@@ -396,7 +452,8 @@ test('real Windows backend verifies prologues and uses native tab/text calls on 
         if kind=='const void *'then return {address=address,read_pointer=true}end
         if kind=='uint32_t *'or kind=='uint8_t *'then
             return setmetatable({},{__newindex=function(_,index,value)
-                if kind=='uint32_t *'then put32(address+index*4,value)else bytes[address+index]=value end
+                if kind=='uint32_t *'then put32(address+index*4,value)
+                elseif not(ignore_close_write and address+index==main+16)then bytes[address+index]=value end
             end})
         end
         local rva=address-base
@@ -448,6 +505,21 @@ test('real Windows backend verifies prologues and uses native tab/text calls on 
     local good=signatures[0x1474370];signatures[0x1474370]='\x90'..good:sub(2)
     local okay,why=backend.verify();assert(not okay and why=='Native tab_switch signature changed','changed non-masked opcode was accepted')
     signatures[0x1474370]=good;assert(backend.verify())
+    local close_good=signatures[0x18fa53f];signatures[0x18fa53f]='\x90'..close_good:sub(2)
+    okay,why=backend.verify();assert(not okay and why=='Native Escape close layout changed')
+    signatures[0x18fa53f]=close_good;assert(backend.verify())
+    put32(screen+L.bar+L.current,3)
+    local content=screen+3010456;bytes[content+1319449]=1
+    okay,why=backend.request_close(screen,3);assert(not okay and why:find('Apply or discard',1,true)and bytes[main+16]==0)
+    bytes[content+1319449]=0;put32(content+1296040+19752,2)
+    okay,why=backend.request_close(screen,3);assert(not okay and why:find('native dialog',1,true)and bytes[main+16]==0)
+    put32(content+1296040+19752,0);presenter_writable=false
+    okay,why=backend.request_close(screen,3);assert(not okay and why:find('not writable',1,true)and bytes[main+16]==0)
+    presenter_writable=true;ignore_close_write=true
+    okay,why=backend.request_close(screen,3);assert(not okay and why:find('readback',1,true)and bytes[main+16]==0)
+    ignore_close_write=false;local calls_before=#calls
+    assert(backend.request_close(screen,3)and bytes[main+16]==1 and #calls==calls_before,'dismissal called an unverified native function')
+    okay,why=backend.request_close(screen,3);assert(not okay and why:find('already closing',1,true)and bytes[main+16]==1,'dismissal was written twice')
     put32(ui+0x429c+4,2);put32(ui+0x429c+20,2)
     assert(select(2,backend.escape_menu())=='covered'and not pcall(backend.show_text,screen,3),'covered native object accepted a write')
     package.loaded['dbf_mcm.native_entry.text.v1']=old_pin

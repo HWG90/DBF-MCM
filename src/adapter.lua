@@ -162,9 +162,17 @@ return {
         end
         hud_integration.poll(hud_runtime.poll())
         hud_diagnostic=hud_runtime.diagnostic()..'; '..hud_integration.diagnostic();ctx.log('HUD+ integration: '..hud_diagnostic)
-        native_entry=MCM.native_entry.new(api,{window=sr.Window,log=ctx.log,
+        local function native_open_ready()
+            input.poll()
+            if not input.focused()or menu.visible or capture.status().owner then return false,'MCM input is already owned'end
+            if tonumber(native.mcm_captured())~=0 then return false,'Native input belongs to another frontend'end
+            if input.down(1)or input.down(2)then return false,'Waiting for the native menu click to release'end
+            return true
+        end
+        native_entry=MCM.native_entry.new(api,{window=sr.Window,log=ctx.log,dismiss_escape=true,
             dependencies={memory=MCM.native_memory,runtime=MCM.native_runtime},
             focused=function()input.poll();return input.focused()end,
+            can_open=native_open_ready,
             hud_menu=function()
                 local bridge=hud_runtime and hud_runtime.poll()
                 if type(bridge)=='table'and bridge.api==1 and bridge.version=='0.2.2'and
@@ -174,14 +182,17 @@ return {
                 return nil,false
             end,
             on_open=function(parent)
-                input.poll()
-                if not input.focused()or menu.visible or capture.status().owner then return false,'MCM input is already owned'end
-                if tonumber(native.mcm_captured())~=0 then return false,'Native input belongs to another frontend'end
-                if input.down(1)or input.down(2)then return false,'Waiting for the native menu click to release'end
+                local ready,why=native_open_ready();if not ready then return false,why end
                 if parent.validate()~=true then return false,'Native MCM parent could not be verified'end
                 local saved=parent.restoration_snapshot
                 if type(saved.focus)~='boolean'or type(saved.cursor)~='boolean'or type(saved.clip)~='boolean'then return false,'Native MCM cursor snapshot is invalid'end
                 menu.native_parent=parent;menu.visible=true;return true
+            end,
+            on_detached=function(proof)
+                local ready,why=native_open_ready();if not ready then return false,why end
+                if type(proof)~='table'or type(proof.validate)~='function'or proof.validate()~=true then return false,'Escape close was not verified'end
+                if sr.Window.mouse_focus()~=true then return false,'Waiting for game input after Escape close'end
+                menu.native_parent=nil;menu.visible=true;return true
             end})
         -- Adapter cleanup restores capture first, then native selection and hook ownership.
         local native_ok,native_why=native_entry.install()
