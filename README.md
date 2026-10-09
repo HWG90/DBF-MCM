@@ -2,39 +2,40 @@
 
 # DBF-MCM
 
-**Diver's Best Friend — Mod Configuration Menu**, preview **0.1.51**.
-An in-game settings framework for Helldivers 2, with mouse and keyboard navigation, per-mod pages and persistent settings.
+**Diver's Best Friend — Mod Configuration Menu**, preview **0.1.53**.
+A shared in-game settings menu for Helldivers 2 mods.
 
-[Downloads](https://github.com/HWG90/DBF-MCM/releases) | [Installation](docs/INSTALL-STANDALONE.md) | [Creator API](docs/API.md) | [Example](examples/example.lua) | [Credits](docs/CREDITS.md)
+[Download](https://github.com/HWG90/DBF-MCM/releases/tag/mcm-v0.1.53-preview.1) | [Installation](docs/INSTALL-STANDALONE.md) | [Mod author quick start](docs/AUTHOR-GUIDE.md) | [API](docs/API.md) | [Credits](docs/CREDITS.md)
+
+## UI polish pass
+
+Clearer page headings, quieter panels and borders, more space between settings, distinct hover/focus/enabled colors, readable key names and better Apply feedback. Enter opens dropdowns, scrollbars can be dragged, and long labels scroll only while hovered or focused. Hovering never changes a setting.
+
+**Settings** sits beside Mod Configuration. It contains the rebindable Open/Close shortcut, preferred window width/height, UI scale, font size, Reset Window and **GitHub Page**, which opens this repository in your browser after releasing menu input.
+
+**DEL** is the default Open/Close key. Escape cancels the active editor or closes MCM. Use the mouse/wheel, or Tab, arrows and Enter. Page Up/Down changes pages. Apply, Discard and Reset Setting use buttons; no F2/F8/F9/Home action shortcuts are assigned by MCM. The menu does not pause gameplay.
 
 ## Installation
 
-Choose one package and loading route. Run one MCM instance and one startup/shared loader.
+Choose one package and one MCM instance.
 
-| Package | Loader | Installation |
-| --- | --- | --- |
-| `DBF-MCM-LLL-0.1.51.zip` | [Live Lua Loader](https://github.com/HWG90/LLL) | Extract the complete `dbf_mcm` folder into `%LOCALAPPDATA%/LLL/Helldivers2/Mods`. |
-| `ModConfigurationMenu-Preview-0.1.51.zip` | LLL or MDL API 2 | Install the complete `dbf_mcm` folder in the selected loader's Mods directory. |
-| `DBF-MCM-Standalone-0.1.51.zip` | [Bingus Shared Loader](https://github.com/CowboyBingus/BingusSharedLoader/releases), v15+ / API 1 | Import into Arsenal, enable alongside Shared Loader, deploy, then restart. |
+| Package | Loading route |
+| --- | --- |
+| `ModConfigurationMenu-Preview-0.1.53.zip` | **MDL API 2 or LLL**. Extract the complete `dbf_mcm` folder into the selected loader's Mods directory. |
+| `DBF-MCM-Standalone-0.1.53.zip` | **Bingus Shared Loader v15+ / API 1**. Import into Arsenal, enable alongside Shared Loader, deploy and restart. |
 
-LLL and Standalone do not require MDL. Bingus Mod Options Menu is optional. Disable the previous MCM provider before switching routes; LLL also scans other supported loader folders. Keep `mod.lua`, `library.txt` and the named native DLL together for loose installations. Native library updates require a normal game restart.
+LLL uses the same loose package as MDL; it does not need a separate download or MDL installed. Keep `mod.lua`, `library.txt` and the named DLL together. Disable the previous MCM provider before switching. Bingus Mod Options Menu is optional. Native DLL updates require a restart.
 
-## Controls and features
-
-Press **F10** to open or close; **Escape** closes the menu or cancels the active editor. Mouse clicks select controls, and the wheel scrolls the area under the pointer. Tab changes focus; arrows navigate or change values; Enter selects; Home restores a control's default; Page Up/Down change sections. Drag the title bar to move the window or its edges/corners to resize it. The menu does not pause gameplay.
-
-Supported controls include toggles, sliders with numeric entry, dropdown choices, key bindings, text input, color pickers, actions, sections and text. Pages support nested categories, two columns, descriptions, disabled controls, confirmation and defaults. Mods can register or unregister during the session. Compatibility registrations cover existing Mod Options Menu consumers; compatibility with every third-party mod is not established.
-
-When the game loses focus, the menu retains its navigation state and releases input/cursor capture. On return it revalidates focus and suppresses held external inputs. Close, disable, shutdown and error recovery restore input ownership.
-
-Framework settings use `%LOCALAPPDATA%/MDL/Helldivers2/Mods/dbf_mcm/settings`, including when MDL is absent, to retain existing values. Mods can supply their own storage provider. Linked presentation controls share an authoritative registered setting rather than saving duplicate values. Optional HUD previews require the separately installed HUD assets.
+Settings retain `%LOCALAPPDATA%/MDL/Helldivers2/Mods/dbf_mcm/settings`, including when MDL is absent. Mods can supply their own storage provider. Existing IDs, linked settings and HUD preview pop-outs are preserved.
 
 ## For mod authors
 
-Use `_G.DBFMCM` API 1 and stable mod/control IDs. Start with the [API](docs/API.md), [example](examples/example.lua) and [integration guide](docs/INTEGRATION.md). Saved scalar values are data and are never executed; failed saves leave values and callbacks unchanged.
+Start with the [short working example](docs/AUTHOR-GUIDE.md). API 1 supports toggles, sliders, choices, keybinds, text input, colors, actions, sections, pages and categories. Stable IDs identify saved values. Callbacks run after successful persistence; failed saves leave values unchanged.
 
-Build the loose packages with `build.ps1 -Python <non-Store Python executable>`; run `build_standalone.py` with that interpreter for the Shared Loader archive. Both use the existing native helper in `native/build`; rebuild it with `native/build.py` after native source changes. `tests/run.py` runs isolated LuaJIT contracts. Building never installs the mod.
+Source is organized into registration/storage, preferences, controller, input, rendering, text layout, styling, compatibility and platform actions. Builds combine these modules into the existing single-file runtime. See [architecture](docs/ARCHITECTURE.md).
 
-## Validation limits
+## Validation and limits
 
-Preview 0.1.51 preserves the current focus/capture, resizing, legacy grouping, linked controls and per-mod storage changes. Offline tests and package checks do not establish live loading or input behavior for every route. All 42 broad contracts and 11 focused suites pass after correcting stale confirmation and mouse-position fixtures; see [release validation](docs/RELEASE-0.1.51.md). Controller navigation and native pause-menu integration are not provided. Intermittent dropdown text loss remains under investigation.
+Offline contracts, native policy checks, package compilation and integrity checks pass. Exact startup, fonts, cursor behavior and appearance still need live verification for each route. See [release notes](docs/RELEASE-0.1.53.md).
+
+HUD+ 0.2.2 retains its own native Options UI; it exposes no supported MCM settings bridge in the supplied package. The native Escape-menu entry remains unfinished. Controller navigation is not provided, and intermittent dropdown text loss remains a live investigation.

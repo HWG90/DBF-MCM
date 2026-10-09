@@ -1,7 +1,7 @@
 local M=assert(loadfile('src/capture.lua'))()
 local flags={focus=true,cursor=false,clip=true};local fail=false
 local w={mouse_focus=function()return flags.focus end,show_cursor=function()return flags.cursor end,clip_cursor=function()return flags.clip end,set_mouse_focus=function(v)if fail then return false end;flags.focus=v end,set_show_cursor=function(v)flags.cursor=v end,set_clip_cursor=function(v)flags.clip=v end}
-local function native()return {mcm_install=function()return 1 end,mcm_capture=function()return 1 end,mcm_captured=function()return 1 end,mcm_release=function()end}end
+local function native()local active=0;return {mcm_install=function()return 1 end,mcm_capture=function()active=1;return 1 end,mcm_captured=function()return active end,mcm_release=function()active=0 end}end
 local root=assert(os.getenv('DBF_LLL_ROOT'),'Set DBF_LLL_ROOT to the matching LLL source checkout')
 local loader=assert(loadfile(root..'/src/ui/capture.lua'))().new(native(),w,function()end)
 local mcm=M.new(native(),w,function()end)

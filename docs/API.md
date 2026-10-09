@@ -51,9 +51,9 @@ This is an independent API, not a drop-in global replacement for CowboyBingus Mo
 
 ## Pages requiring confirmation
 
-Set `require_confirmation = true` on a page definition. Default is false. The menu stages edits and button actions and displays APPLY and DISCARD (F9 applies, F8 discards). Navigating away or closing keeps the draft in memory; reload/unregister drops it. Pending edits are never persisted automatically.
+Set `require_confirmation = true` on a page definition. Pages require confirmation by default; use `require_confirmation=false` for immediate pages. Button actions are staged only when the button itself sets `require_confirmation=true`. The menu stages deferred edits and explicitly queued actions and displays APPLY and DISCARD buttons. Navigating away or closing keeps the draft in memory; reload/unregister drops it. Pending edits are never persisted automatically.
 
-`handle.edit(id, value)` stages on confirmation pages and saves immediately elsewhere. `handle.preview(id)` reads a draft if present; `handle.get(id)` always reads committed settings. `handle.queue(button_id)` stages an action on confirmation pages. `handle.confirm(page_id)` revalidates, saves all page settings in one write, commits them, then invokes setting callbacks and queued actions. A failed save keeps the draft and invokes no callbacks/actions. `handle.discard(page_id)` clears the draft and queued actions.
+`handle.edit(id, value)` stages on confirmation pages and saves immediately elsewhere. `handle.preview(id)` reads a draft if present; `handle.get(id)` always reads committed settings. `handle.queue(button_id)` stages only buttons with `require_confirmation=true`; other buttons run immediately. `handle.confirm(page_id)` revalidates, saves all page settings in one write, commits them, then invokes setting callbacks and queued actions. A failed save keeps the draft and invokes no callbacks/actions. `handle.discard(page_id)` clears the draft and queued actions.
 
 Programmatic `set`, `reset` and `activate` remain explicit immediate operations. Confirmation is a UI workflow, not an authorization boundary. Callback/gameplay operations are not transactional: an action failure does not roll back committed settings or earlier callbacks. Mod authors should implement guarded operations and report their own runtime outcome.
 
@@ -108,4 +108,8 @@ A presentation control can set `source_mod_id` and `source_control_id` to route 
 
 Display-only text controls can include `swatches={{rgb={255,128,0},row=1}, ...}`. Up to eight swatches render with stock rectangles/text and store no value.
 
-`focus_page(mod_id,page_id)` opens a registered page when the game is focused and returns success/error. `menu_binding_status()` exposes focus, active editors and the global F10 virtual key. Opening remains subject to capture/ownership checks.
+`focus_page(mod_id,page_id)` opens a registered page when the game is focused and returns success/error. `menu_binding_status()` exposes focus, active editors and the configured menu virtual key. Opening remains subject to capture/ownership checks.
+
+## UI refresh behavior (0.1.53)
+
+Controls with `require_confirmation=false` commit immediately even on a confirming page. Other edits remain pending until Apply; disk failures retain the pending values and suppress callbacks. Linked presentation controls keep the referenced handle authoritative. `menu_binding_status().global_key` reports the saved Open/Close key, default 46 (DEL). Settings uses the framework's authoritative handle. Apply, Discard and Reset Setting are buttons; no secondary action shortcuts are assigned. Delete used inside text or key-binding editors is owned by the editor.

@@ -50,22 +50,23 @@ test('button actions are not persisted and disabled controls do not change',func
  s.pages[1].controls[#s.pages[1].controls+1]={id='run',type='button',label='Run',on_activate=function()n=n+1 end}
  local h=core.new().register(s);assert(not pcall(h.set,'toggle',false));assert(h.activate('run'));assert(n==1)
 end)
-test('F10 edge opens once and held key does not close immediately',function()
+test('DEL edge opens once and held key does not close immediately',function()
  local api=core.new();api.register(spec());local menu=menu_module.new(api)
- local down=true;local input={down=function(k)return k==121 and down end}
+ local down=true;local input={down=function(k)return k==46 and down end}
  menu.tick(input);assert(menu.visible);menu.tick(input);assert(menu.visible)
  down=false;menu.tick(input);down=true;menu.tick(input);assert(not menu.visible)
 end)
 test('keyboard navigation reaches mods beyond the eighth and their pages',function()
  local api=core.new();for i=1,20 do local s=spec(string.format('mod_%02d',i));s.pages[2]={id='extra',name='Extra',controls={}};api.register(s)end
- local m=menu_module.new(api);m.key(121);for i=1,19 do m.key(40)end;assert(m.selected==20)
+ local m=menu_module.new(api);m.key(46);for i=1,19 do m.key(40)end;assert(m.selected==20)
  m.key(34);assert(m.page==2);local c=m.compose(1920,1080);assert(#c>0 and m.mod_scroll>0)
 end)
 test('keyboard edits selected settings, defaults and key capture',function()
  -- This case exercises immediate edits; default pages now stage until Apply.
  local api=core.new();local definition=spec();definition.pages[1].require_confirmation=false
- local h=api.register(definition);local m=menu_module.new(api);m.key(121);m.key(9);m.key(13)
- assert(h.get('toggle')==false);m.key(36);assert(h.get('toggle')==true)
+ local h=api.register(definition);local m=menu_module.new(api);m.key(46);m.key(9);m.key(13)
+ assert(h.get('toggle')==false)
+ local reset=rendered_text(m,'RESET SETTING');m.tick({down=function(code)return code==1 end,mouse=function()return reset.x,reset.y end});assert(h.get('toggle')==true)
  m.key(40);m.key(39);assert(h.get('slider')==5.5)
  m.key(40);m.key(40);m.key(13);m.key(65);assert(h.get('key')==65 and not m.capture)
  m.key(13);m.key(27);assert(h.get('key')==65 and m.visible)
@@ -81,7 +82,7 @@ test('native GUI mock draws and cleans up without replacing global update',funct
   World={create_screen_gui=function()return {}end,destroy_gui=function()destroyed=destroyed+1 end},
   Vector2=function(...)return {...}end,Vector3=function(...)return {...}end,Color=function(...)return {...}end,
   Gui={rect=function()draws=draws+1;return draws end,text=function()draws=draws+1;return draws end,destroy_rect=function()end,destroy_text=function()end}}
- local api=core.new();api.register(spec());local m=menu_module.new(api);m.key(121)
+ local api=core.new();api.register(spec());local m=menu_module.new(api);m.key(46)
  local v=assert(loadfile('src/view.lua'))().new(sr);v.draw(m.compose(1920,1080));assert(draws>10);v.draw({});assert(destroyed==1)
 end)
 test('capture restores exact cursor settings on close and focus loss',function()
@@ -98,19 +99,22 @@ test('capture restores exact cursor settings on close and focus loss',function()
  assert(c.sync(true,true,{}));assert(c.sync(true,false,{}));assert(not c.active and values.focus and not values.cursor)
 end)
 test('failed native capture restores cursor state and does not retain ownership',function()
- local capture_module=assert(loadfile('src/capture.lua'))();local values={focus=false,cursor=true,clip=true}
- local n={mcm_install=function()return 1 end,mcm_capture=function()return 0 end,mcm_release=function()end}
+ local capture_module=assert(loadfile('src/capture.lua'))();local values={focus=true,cursor=false,clip=true}
+ local n={mcm_install=function()return 1 end,mcm_capture=function()return 0 end,mcm_captured=function()return 0 end,mcm_release=function()end}
  local w={};for _,k in ipairs({'focus','cursor','clip'})do local key=k;local name=({focus='mouse_focus',cursor='show_cursor',clip='clip_cursor'})[key]
   w[name]=function()return values[key]end;w['set_'..name]=function(v)values[key]=v end end
- local c=capture_module.new(n,w,function()end);local ok=c.sync(true,true,{});assert(not ok and not c.active and not values.focus and values.cursor and values.clip)
+ local c=capture_module.new(n,w,function()end);local ok=c.sync(true,true,{});assert(not ok and not c.active and values.focus and not values.cursor and values.clip)
 end)
 test('capture loss closes ownership and repeated release is safe',function()
- local capture_module=assert(loadfile('src/capture.lua'))();local calls=0
- local n={mcm_install=function()return 1 end,mcm_capture=function()return 1 end,mcm_captured=function()return 0 end,mcm_release=function()calls=calls+1 end}
- local w={mouse_focus=function()return true end,show_cursor=function()return false end,clip_cursor=function()return true end,
-  set_mouse_focus=function()end,set_show_cursor=function()end,set_clip_cursor=function()end}
- local c=capture_module.new(n,w,function()end);assert(c.sync(true,true,{}));assert(not c.sync(true,true,{}));assert(not c.active)
+ local capture_module=assert(loadfile('src/capture.lua'))();local calls=0;local active=0
+ local n={mcm_install=function()return 1 end,mcm_capture=function()active=1;return 1 end,mcm_captured=function()return active end,mcm_release=function()active=0;calls=calls+1 end}
+ local values={focus=true,cursor=false,clip=true};local w={}
+ for _,name in ipairs({'mouse_focus','show_cursor','clip_cursor'})do local key=({mouse_focus='focus',show_cursor='cursor',clip_cursor='clip'})[name]
+  w[name]=function()return values[key]end;w['set_'..name]=function(value)values[key]=value end end
+ local c=capture_module.new(n,w,function()end);assert(c.sync(true,true,{}));active=0
+ assert(not c.sync(true,true,{}));assert(not c.active and values.focus and not values.cursor)
  c.release();c.release();assert(calls==3)
+
 end)
 test('legacy bridge imports existing and late mods beyond eight and applies callbacks',function()
  local core=assert(loadfile('src/core.lua'))();local bridge=assert(loadfile('src/legacy.lua'))()
@@ -133,7 +137,7 @@ test('wheel scrolls settings without selecting or changing them and clamps at en
  api.register({id='wheel',name='Wheel',pages={{id='p',name='Page',controls=rows}}})
  local m=menu_module.new(api);m.visible=true;m.compose(1920,1080)
  m.wheel(-120,1000,500);assert(m.scroll==3 and m.row==1);m.compose(1920,1080);assert(m.scroll==3)
- m.wheel(-12000,1000,500);assert(m.scroll==18);m.wheel(12000,1000,500);assert(m.scroll==0)
+ m.wheel(-12000,1000,500);assert(m.scroll==30-m.settings_visible);m.wheel(12000,1000,500);assert(m.scroll==0)
  m.wheel(-60,1000,500);assert(m.scroll==0);m.wheel(-60,1000,500);assert(m.scroll==3)
  m.wheel(-120,0,0);assert(m.scroll==3);assert(not api.get('wheel','r1'))
 end)
@@ -147,13 +151,13 @@ test('slider drag previews snaps clamps and commits once on release',function()
  local down=true;local px=track.x;local input={down=function(k)return k==1 and down end,mouse=function()return px,track.y end}
  m.tick(input);assert(writes==0);px=track.x+track.w;m.tick(input);assert(writes==0)
  down=false;m.tick(input);assert(api.get('drag','v')==100 and writes==1)
- m.compose(1920,1080);down=true;px=track.x;m.tick(input);m.key(121);down=false;m.tick(input);assert(writes==1)
+ m.compose(1920,1080);down=true;px=track.x;m.tick(input);m.key(46);down=false;m.tick(input);assert(writes==1)
 end)
-test('left arrow cannot open the closed menu; physical F10 still opens it',function()
+test('left arrow cannot open the closed menu; physical DEL still opens it',function()
  local core=assert(loadfile('src/core.lua'))();local menu_module=assert(loadfile('src/menu.lua'))()
  local m=menu_module.new(core.new(nil,function()end));m.key(37);assert(not m.visible)
  m.tick({down=function(k)return k==37 end});assert(not m.visible)
- m.tick({down=function(k)return k==121 end});assert(m.visible)
+ m.tick({down=function(k)return k==46 end});assert(m.visible)
  local f=assert(io.open('src/adapter.lua'));local source=f:read('*a');f:close();assert(not source:find("binding_host.is_down",1,true))
 end)
 test('scrollbar thumb indicates top and bottom and is absent for short lists',function()
@@ -180,9 +184,9 @@ test('confirmation page stages settings and actions and persists before callback
 end)
 test('title drag moves all menu content and clamps at screen edges',function()
  local core=assert(loadfile('src/core.lua'))();local module=assert(loadfile('src/menu.lua'))();local m=module.new(core.new(nil,function()end))
- m.visible=true;m.compose(1920,1080);local px,py,down=600,920,true
+ m.visible=true;m.compose(1920,1080);local px,py,down=310,920,true
  local input={down=function(k)return k==1 and down end,mouse=function()return px,py end}
- m.tick(input);px=700;py=970;m.tick(input);m.compose(1920,1080);assert(m.window_x==310 and m.window_y==180)
+ m.tick(input);px=410;py=970;m.tick(input);m.compose(1920,1080);assert(m.window_x==310 and m.window_y==180)
  px=9999;py=9999;m.tick(input);local commands=m.compose(1920,1080);assert(m.window_x==420 and m.window_y==260 and commands[1].x==420)
  down=false;m.tick(input);px=0;py=0;m.tick(input);assert(m.window_x==420)
  m.compose(1280,720);assert(m.window_x<=280 and m.window_y<=174)

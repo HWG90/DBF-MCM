@@ -17,7 +17,7 @@ assert(b.x+b.w<=1920 and b.y+b.h<=1080)
 -- Southwest keeps the opposite corner anchored and clamps minimum dimensions.
 press(b.x+2,b.y+2);move(4000,4000);release();b=m.window_bounds
 assert(m.window_width==1100 and m.window_height==600)
-assert(m.settings_visible==6 and m.tree_visible==10)
+assert(m.settings_visible==5 and m.tree_visible==10)
 -- Title drag clamps position without changing dimensions.
 press(b.x+100,b.y+b.h-30);move(-4000,-4000);release();b=m.window_bounds
 assert(b.x==0 and b.y==0 and b.w==1100 and b.h==600)
@@ -41,7 +41,7 @@ for _,edge in ipairs({'w','e','s','n'})do
  if edge=='w' or edge=='e'then assert(after.h==before.h and after.w<before.w)else assert(after.w==before.w and after.h<before.h)end
 end
 -- Close cancels resize and produces no drawing; recovery clears drag too.
-m.key(121);assert(#compose()==0);m.recover();assert(not m.visible)
+m.key(46);assert(#compose()==0);m.recover();assert(not m.visible)
 -- Changing monitor resolution clamps the saved geometry to current bounds.
 m.visible=true;m.compose(800,600);b=m.window_bounds
 assert(b.x>=0 and b.y>=0 and b.x+b.w<=800 and b.y+b.h<=600)

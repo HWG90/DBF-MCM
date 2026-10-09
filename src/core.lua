@@ -39,8 +39,8 @@ local function normalize(c,v)
 end
 local function stored(c)return c.type=='input' or c.type=='toggle' or c.type=='slider' or c.type=='choice' or c.type=='keybind' or c.type=='color'end
 function M.new(store,log,grouping)
-    local api={api=1,version='0.1.51',color_hex=M.color_hex,color_rgb=M.color_rgb,hsv_rgb=M.hsv_rgb,rgb_hsv=M.rgb_hsv,mods={},revision=0};log=log or function()end
-    api.storage_per_mod=true;api.presentation_links=true;api.text_swatches=true
+    local api={api=1,version='0.1.53',color_hex=M.color_hex,color_rgb=M.color_rgb,hsv_rgb=M.hsv_rgb,rgb_hsv=M.rgb_hsv,mods={},revision=0};log=log or function()end
+    api.storage_per_mod=true;api.presentation_links=true;api.text_swatches=true;api.category_page_links=true
     local palette=store and store.load('mcm_custom_palette') or {};local swatches={}
     for i=1,12 do local ok,v=pcall(M.color_hex,palette['swatch_'..i]);if ok then swatches[#swatches+1]=v end end
     function api.swatches()return copy(swatches)end
@@ -67,7 +67,7 @@ function M.new(store,log,grouping)
         local categories={}
         for _,category in ipairs(spec.categories or {})do
             id(category.id);assert(not categories[category.id],'Duplicate category')
-            assert(category.style==nil or category.style=='author','Invalid category style');assert(category.collapsed==nil or type(category.collapsed)=='boolean','Category collapsed must be boolean')
+            assert(category.style==nil or category.style=='author' or category.style=='page','Invalid category style');assert(category.collapsed==nil or type(category.collapsed)=='boolean','Category collapsed must be boolean')
             local c={id=category.id,name=plain(category.name),parent=category.parent,style=category.style,collapsed=category.collapsed};if c.parent then id(c.parent)end
             categories[c.id]=c;mod.categories[#mod.categories+1]=c
         end
@@ -148,7 +148,7 @@ function M.new(store,log,grouping)
         function handle.edit(key,value)
             assert(api.mods[mod.id]==mod,'Retired registration')
             local c=assert(mod.controls[key],'Unknown control')
-            if not c.page.require_confirmation then return handle.set(key,value)end
+            if c.require_confirmation==false or not c.page.require_confirmation then return handle.set(key,value)end
             assert(stored(c) and not c.disabled,'Setting unavailable');value=normalize(c,value)
             if c.validate then assert(c.validate(value)~=false,'Value rejected by mod')end
             if value==handle.get(key)then c.page.pending[key]=nil else c.page.pending[key]=value end

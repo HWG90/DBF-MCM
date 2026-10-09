@@ -10,7 +10,7 @@ The native DLL is pinned until process exit because another window subclass can 
 
 Native policy and held-release tests pass, and Lua lifecycle tests cover cursor restoration, capture failure and capture loss. Actual game input consumption is not yet verified. Direct device polling and controller input are not covered. The opening key may reach the game before the post-update menu acquires capture. This is an input-routing candidate, not a pause or universal device interception mechanism.
 
-Live check: open with F10 after releasing mouse buttons. Move and click the cursor, navigate with arrows, and verify background camera/menu actions do not respond. Close and confirm ordinary controls return. Repeat an Alt-Tab and disable/re-enable check. If background controls still respond, identify that input path before extending interception.
+Live check: open with the configured key (DEL by default) after releasing mouse buttons. Move and click the cursor, navigate with arrows, and verify background camera/menu actions do not respond. Close and confirm ordinary controls return. Repeat an Alt-Tab and disable/re-enable check. If background controls still respond, identify that input path before extending interception.
 
 ## Build
 

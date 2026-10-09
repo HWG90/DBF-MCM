@@ -1,34 +1,24 @@
-# Architecture
+# Source organization
 
-## Module boundaries
+| Module | Responsibility |
+| --- | --- |
+| `core.lua`, `store.lua` | Registration, validation, drafts, callbacks and scalar persistence. |
+| `preferences.lua` | MCM's own persisted shortcut, size, scale and font settings. |
+| `menu.lua` | Per-menu state, navigation and editor actions. |
+| `ui/input.lua` | Keyboard/pointer interpretation, scrolling and drag ownership. |
+| `ui/render.lua` | Draw commands, matching hit regions and popup composition. |
+| `ui/text.lua`, `ui/theme.lua` | UTF-8 text layout, colors and readable key names. |
+| `view.lua` | Stock Stingray primitives, retained geometry and resource cleanup. |
+| `capture.lua`, `native/input_guard.c` | Cursor/input ownership and verified restoration. |
+| `platform.lua` | Explicit browser action after input restoration. |
+| `compat.lua`, `legacy.lua`, `grouping.lua` | Existing registrations and authoritative presentation mounts. |
+| `authoring.lua`, `framework.lua` | Creator helpers and framework pages. |
+| `console.lua`, `adapter.lua`, `startup.lua` | Diagnostics and loader/runtime lifecycles. |
 
-| Module | Responsibility | Depends on |
-| --- | --- | --- |
-| `src/core.lua` | Definition validation, registration, normalized values, confirmation drafts, callbacks, shared swatches | Injected store/logger |
-| `src/store.lua` | Plain INI-like scalar persistence with temp/backup replacement | Lua file API |
-| `src/menu.lua` | Menu state, tree, input interpretation, controls, dropdown/color dialogs; emits draw commands | Registry API |
-| `src/view.lua` | Draw-command renderer and GUI resource cleanup | Stingray GUI |
-| `src/capture.lua` | Cursor ownership snapshot, acquisition/release/error lifecycle | Native helper and Stingray Window |
-| `src/legacy.lua` | Existing Bingus registration import and explicit HUD grouping | Existing ModOptionsMenu + registry |
-| `src/adapter.lua` | MDL API 2 entry point, physical input polling, F10, lifecycle and module composition | All modules |
-| `native/input_guard.c` | Foreground game-window keyboard/mouse message filtering; wheel accumulation | Windows APIs |
+Each menu owns one explicit state table shared by its controller, input and renderer. There are no implicit globals for UI state. Child modules load before the controller; the release builder bundles them into one `dbf_mcm/mod.lua`. The Standalone archive embeds the same runtime and native DLL.
 
-The build wraps each Lua module into a local `MCM` namespace, then returns the MDL adapter. It publishes only `_G.DBFMCM` as the consumer contract. Consuming mods provide definitions and callbacks; they do not need the renderer, native input helper or persistence implementation.
+The public consumer contract remains `_G.DBFMCM` API 1. Definitions and saved values stay separate. Input flows through validation, persistence, committed values and callbacks. Confirmation pages hold drafts until Apply; immediate controls bypass staging. Failed writes preserve committed values and suppress callbacks.
 
-## Data flow
+Shell/background, row backgrounds, controls and text have distinct depths. Hover keeps primitive counts stable. Unchanged native primitives are retained; stale IDs are destroyed before replacement allocations. HUD preview material uniforms update separately from retained geometry.
 
-Definition -> validate entire definition -> load valid saved values -> publish registration handle. UI input -> preview/edit -> validate -> persist -> commit -> callback. On confirmation pages, edit/queue -> in-memory draft -> Confirm -> revalidate all -> one settings write -> commit -> callbacks/actions. Closing retains page drafts until unregister/reload. Color picker previews are separate and commit only through Use Color. Swatch saves have their own shared file.
-
-Renderer commands carry position, size, color and optional layer. Menu is layer 100, dropdowns 200, color dialogs 300, with small per-command ordering offsets. Keep depth values bounded. The view destroys previous primitives each frame; optimizing retained primitives is future work.
-
-## Lifecycle
-
-MDL enables adapter -> creates modules and publishes API -> consuming mods register. Update imports legacy pages, polls input, updates menu, syncs capture and draws. Disable/error releases capture and GUI and unpublishes owned API. Consumers must detect API identity changes and re-register. The native callback is pinned until process exit; capture release makes it pass ordinary traffic while draining held menu inputs.
-
-## Extending controls
-
-Add a type to core validation and normalization, define its persisted representation, implement menu interactions and draw commands, then add meaningful contracts for failures and confirmation behavior. Extend store only with constrained data formats; never execute settings files. Preserve mod-wide setting IDs when reorganizing pages. Validate before mutating the registry. Handle.get is the committed view; preview is the draft view.
-
-## Legacy bridge
-
-Reads the `state` upvalue from the installed register_option function; does not replace its global API. Values use host.get/set and original callbacks. Imports are rebuilt when registry revision changes. DBF-HUD's Layout Editor and Placement are explicitly grouped into one root; generic prefix guessing is avoided. Imported defaults and values remain owned by the legacy host. Public author integrations should use DBFMCM directly.
+Source tests and the actual-compose preview exporter operate offline. Their results do not establish live fonts, geometry, cursor behavior or acceptance.

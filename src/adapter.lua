@@ -22,8 +22,8 @@ local function close()
     api,menu,input=nil,nil,nil;binding_host=nil;held_toggle=false
 end
 return {
-    name='Mod Configuration Menu (Preview)',version='0.1.51',author='HWG90',
-    description='Independent MCM-style author framework. F10 opens a keyboard/mouse preview. Not yet a native pause-menu replacement.',
+    name='Mod Configuration Menu (Preview)',version='0.1.53',author='HWG90',
+    description='Independent MCM-style author framework. DEL opens a keyboard/mouse preview. Not yet a native pause-menu replacement.',
     on_enable=function(ctx)
         assert(ctx.api==2 and type(ctx.global)=='function' and type(ctx.on_cleanup)=='function','MDL API 2 required')
         assert(not rawget(_G,'DBFMCM'),'Another DBFMCM instance is active')
@@ -108,7 +108,7 @@ return {
             return ok,reason
         end
         function api.is_open()return menu.visible end
-        function api.menu_binding_status()return {focused=input.focused(),editing=menu.capture~=false or menu.text_edit~=nil or menu.color_picker~=nil,global_key=121}end
+        function api.menu_binding_status()return {focused=input.focused(),editing=menu.capture~=false or menu.text_edit~=nil or menu.color_picker~=nil,global_key=api.menu_toggle_key or 46}end
         function api.focus_page(mod_id,page_id)
             if not input.focused()then return false,'Game is not focused'end
             for index,mod in ipairs(api.list())do if mod.id==mod_id then
@@ -118,8 +118,26 @@ return {
         end
         ctx.global('DBFMCM',api)
         legacy=MCM.legacy.new(api,ctx.log,MCM.core)
-        registered=api.register(MCM.framework({example_action=function()ctx.log('MCM example action activated')end},MCM.authoring))
-        ctx.log('IMMEDIATE_CAPTURE_RELEASE_0148 20261004; MCM preview enabled; F10 opens the menu. Existing Mod Options Menu is unchanged.')
+        local definition=MCM.framework({example_action=function()ctx.log('MCM example action activated')end},MCM.authoring)
+        local actions={}
+        actions.reset_window=function()
+            local ok,reason=MCM.preferences.reset_window(menu,registered);assert(ok,reason);return reason
+        end
+        local launch=MCM.platform.windows_launcher(ffi)
+        actions.open_github=function()
+            local ok,reason=MCM.platform.open_github(api.close,launch);assert(ok,reason);return reason
+        end
+        table.insert(definition.pages,1,MCM.preferences.page(function(key)
+            local ok,reason=MCM.preferences.apply(api,menu,registered,key)
+            if not ok then ctx.log('MCM preference update failed: '..tostring(reason));menu.notice=tostring(reason)end
+        end,actions))
+        registered=api.register(definition)
+        api.settings_mod_id=registered.id;api.settings_page_id='mcm_settings'
+        local ok,reason=MCM.preferences.apply(api,menu,registered)
+        if reason then ctx.log('MCM preferences: '..tostring(reason));menu.notice=tostring(reason)end
+        if not ok then api.menu_toggle_key=46 end
+        ctx.log('MCM preview enabled; menu shortcut '..MCM.menu.key_name(api.menu_toggle_key or 46)..'.')
+
     end,
     on_update=function(ctx,dt)
         if retired or not api then return end
@@ -134,9 +152,10 @@ return {
                 if f then f:write(report,'\n');f:close()end
             end
             -- Native binding action aliases can collide with game menu navigation.
-            -- Use the physical F10 edge until an independent action is verified.
+            -- Use the saved physical key edge; native action aliases may collide.
             local focused=input.focused()
-            if menu.input_focus(focused,input)then menu.tick(input)end
+            local process_input=menu.input_focus(focused,input)
+            if process_input and not menu.visible then menu.tick(input);process_input=false end
             if retired or not menu then return end
             -- Release the manager before snapshotting game cursor flags.
             local loader=rawget(_G,'LiveLuaLoader')
@@ -147,7 +166,11 @@ return {
                 menu.visible=false;ctx.log('MCM handoff refused: loader lacks safe close_manager API')
             end
             local acquired,reason=capture.sync(menu.visible,focused,input.window())
+            if not acquired and (tostring(reason):find('Cannot acquire input capture',1,true)or tostring(reason):find('Input capture lost',1,true)or tostring(reason):find('Window capture unavailable',1,true))then view.release();return end
             if not acquired then menu.visible=false;menu.capture=false;capture.release();ctx.log('Menu closed: '..tostring(reason))end
+            if acquired and process_input then menu.tick(input)end
+            if retired or not menu then return end
+            if not menu.visible and capture.active then capture.release()end
             menu.advance(dt)
             local w,h=stingray.Gui.resolution();view.draw(menu.compose(w,h))
         end)
@@ -155,7 +178,7 @@ return {
             ctx.log('MCM frame failed; menu closed safely: '..tostring(err))
             menu.recover()
             if capture then pcall(capture.release)end;if view then pcall(view.release)end
-            -- Keep registrations and the F10 listener alive for recovery.
+            -- Keep registrations and the menu shortcut listener alive for recovery.
         end
     end,
     on_disable=close,

@@ -20,12 +20,12 @@ LiveLuaLoader={close_manager=function()closes=closes+1;return true end}
 local ctx={log=function(message)error('Unexpected adapter error: '..message)end}
 adapter.on_update(ctx,.016);assert(active and menu.visible and not flags.focus and flags.cursor)
 local selected,page,row=menu.selected,menu.page,menu.row
-focused=false;keys[121]=true;keys[1]=true;adapter.on_update(ctx,.016)
+focused=false;keys[46]=true;keys[1]=true;adapter.on_update(ctx,.016)
 assert(menu.visible and menu.suspended and not active and flags.focus and not flags.cursor,'Blur closed menu or retained capture')
 assert(menu.selected==selected and menu.page==page and menu.row==row and closes==1,'Blur changed navigation/loader state')
 adapter.on_update(ctx,.016);assert(menu.visible and not active and closes==1)
 focused=true;adapter.on_update(ctx,.016);assert(menu.visible and active and closes==2,'Held external hotkey replayed on return')
-keys[121]=false;keys[1]=false;adapter.on_update(ctx,.016);keys[121]=true;adapter.on_update(ctx,.016)
-assert(not menu.visible and not active and flags.focus and not flags.cursor,'Explicit F10 did not restore game input')
+keys[46]=false;keys[1]=false;adapter.on_update(ctx,.016);keys[46]=true;adapter.on_update(ctx,.016)
+assert(not menu.visible and not active and flags.focus and not flags.cursor,'Explicit DEL did not restore game input')
 assert(menu.selected==selected and menu.page==page,'Navigation changed during focus round trip')
 print('PASS: actual adapter/menu/capture preserves open navigation on blur, releases background capture, reacquires after focus validation, suppresses held external input, and closes/restores explicitly')
