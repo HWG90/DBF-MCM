@@ -1,12 +1,12 @@
 # DBF-MCM branding
 
-DBF-MCM is the Mod Configuration Menu member of the Diver's Best Friend family, alongside DBF-HUD and the Automated Stratagem System (ASS).
+DBF-MCM is the Mod Configuration Menu member of the Divers' Best Friend family, alongside DBF-HUD and the Automated Stratagem System (ASS).
 
-Use **DBF-MCM** as the short project name and **Diver's Best Friend — Mod Configuration Menu** as the full name.
+Use **DBF-MCM** as the short project name and **Divers' Best Friend — Mod Configuration Menu** as the full name.
 
-- `banner.png`: wide header for repository pages and project announcements.
-- `logo.png`: compact emblem for project cards and documentation.
+- `banner-goose-v2.png`: current wide header, using Goose's supplied officer helmet reference.
+- `banner.png` and `logo.png`: preserved original branding.
 
-Retain the charcoal tactical grid, warm yellow accents, ivory lettering, angular frame and helmet identity. MCM's menu rows and sliders distinguish it from the other DBF projects. Preserve aspect ratio and generous margins; keep version numbers outside the artwork.
+Use charcoal, restrained yellow accents and ivory lettering with a simple layout. Preserve the supplied helmet's silhouette and surface markings. Keep generous margins and version numbers outside the artwork.
 
-The README uses the banner at the top and a centered 320-pixel logo in its branding section.
+The README uses the current banner at the top. The banner was composed with the built-in image generator from the user-supplied reference; existing helmet markings were retained.

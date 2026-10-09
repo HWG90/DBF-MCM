@@ -1,8 +1,8 @@
-![DBF-MCM](assets/branding/banner.png)
+![MCM by Goose](assets/branding/banner-goose-v2.png)
 
 # DBF-MCM
 
-**Diver's Best Friend — Mod Configuration Menu**, preview **0.1.56**.
+**Divers' Best Friend — Mod Configuration Menu**, preview **0.1.56**.
 A shared in-game settings menu for Helldivers 2 mods.
 
 [Nexus Mods](https://www.nexusmods.com/helldivers2/mods/17157) | [GitHub downloads](https://github.com/HWG90/DBF-MCM/releases) | [Installation](docs/INSTALL-STANDALONE.md) | [Mod author quick start](docs/AUTHOR-GUIDE.md) | [API](docs/API.md) | [Credits](docs/CREDITS.md)
