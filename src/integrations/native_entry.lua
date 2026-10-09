@@ -138,57 +138,75 @@ local function upvalue(fn,wanted)
     for index=1,64 do local name,value=debug.getupvalue(fn,index);if not name then break end;if name==wanted then return value,index end end
 end
 local function mom_step(env,root)
+    local diagnostic={nodes=0,candidates=0,state=false,node_limit=256,depth_limit=32,c_skipped=0,depth_limited=0,budget_exhausted=false,candidate_details={}}
     local host=rawget(env,'ModOptionsMenu')
     local register=type(host)=='table'and rawget(host,'register_option')
     local api_state=type(register)=='function'and upvalue(register,'state')
-    if type(api_state)~='table'then return end
-    local seen,nodes={},0;local visit
-    local function visit_hook(hook,depth)
+    if type(api_state)~='table'then return nil,nil,nil,diagnostic end
+    diagnostic.state=true
+    local queue,seen,at={},{},1
+    local function enqueue(fn,depth)
+        if type(fn)~='function'or seen[fn]then return end
+        if depth>32 then diagnostic.depth_limited=diagnostic.depth_limited+1;return end
+        local info=debug.getinfo(fn,'S')
+        if not info or info.what=='C'then diagnostic.c_skipped=diagnostic.c_skipped+1;seen[fn]=true;return end
+        seen[fn]=true;queue[#queue+1]={fn=fn,depth=depth,info=info}
+    end
+    local function hook_edges(hook,depth)
         if type(hook)~='table'or type(rawget(hook,'base'))~='function'then return end
         local driver=rawget(hook,'driver')
         if type(driver)~='table'or type(rawget(driver,'frame'))~='function'then return end
-        local found,index,original=visit(rawget(driver,'frame'),depth+1);if found then return found,index,original end
-        return visit(rawget(hook,'base'),depth+1)
+        enqueue(rawget(hook,'base'),depth);enqueue(rawget(driver,'frame'),depth)
     end
-    visit=function(fn,depth)
-        if type(fn)~='function'or seen[fn]or depth>32 or nodes>=128 then return end
-        local info=debug.getinfo(fn,'S');if not info or info.what=='C'then return end
-        seen[fn]=true;nodes=nodes+1
+    local function names(fn)
+        local result={};for slot=1,64 do local name=debug.getupvalue(fn,slot);if not name then break end;result[#result+1]=name~=''and name or '<anonymous>'end
+        return table.concat(result,',')
+    end
+    enqueue(root or rawget(env,'update'),0)
+    while at<=#queue and diagnostic.nodes<256 do
+        local node=queue[at];at=at+1;local fn,depth=node.fn,node.depth
+        diagnostic.nodes=diagnostic.nodes+1
         local ensure,slot=upvalue(fn,'ensure_mods_tab')
-        if type(ensure)=='function'and upvalue(fn,'TAB_BAR')==L.bar and upvalue(fn,'MODS_TAB')==3 and upvalue(fn,'state')==api_state and upvalue(ensure,'state')==api_state then return fn,slot,ensure end
-        for _,name in ipairs({'step','inner','run','finish','previous_update','original_update','previous','original'})do
-            local found,index,original=visit(upvalue(fn,name),depth+1);if found then return found,index,original end
+        if type(ensure)=='function'then
+            diagnostic.candidates=diagnostic.candidates+1
+            diagnostic.bar=upvalue(fn,'TAB_BAR');diagnostic.tab=upvalue(fn,'MODS_TAB')
+            diagnostic.step_state=upvalue(fn,'state')==api_state;diagnostic.ensure_state=upvalue(ensure,'state')==api_state
+            diagnostic.candidate_short_src=node.info.short_src;diagnostic.candidate_upvalues=names(fn)
+            local info=debug.getinfo(ensure,'S');diagnostic.ensure_short_src=info and info.short_src;diagnostic.ensure_upvalues=names(ensure)
+            if #diagnostic.candidate_details<8 then diagnostic.candidate_details[#diagnostic.candidate_details+1]={short_src=diagnostic.candidate_short_src,upvalues=diagnostic.candidate_upvalues,ensure_short_src=diagnostic.ensure_short_src,ensure_upvalues=diagnostic.ensure_upvalues,bar=diagnostic.bar,tab=diagnostic.tab,step_state=diagnostic.step_state,ensure_state=diagnostic.ensure_state}end
         end
-        local found,index,original=visit_hook(upvalue(fn,'hook'),depth)
-        if found then return found,index,original end
+        if type(ensure)=='function'and upvalue(fn,'TAB_BAR')==L.bar and upvalue(fn,'MODS_TAB')==3 and upvalue(fn,'state')==api_state and upvalue(ensure,'state')==api_state then return fn,slot,ensure,diagnostic end
+        -- Breadth first: helper trees cannot consume the whole budget before
+        -- a nearby update-chain sibling. Prioritize actual forwarding edges.
+        for _,name in ipairs({'previous_update','original_update','originalUpdate','previousUpdate','previous','original','old_update','oldUpdate','upstream','next_update','inner','step','update','run','finish'})do
+            enqueue(upvalue(fn,name),depth+1)
+        end
+        hook_edges(upvalue(fn,'hook'),depth+1)
         -- Stripped loader wrappers keep closure values but lose their names.
         -- Anonymous functions may lead to named MOM; an anonymous MOM callback
         -- itself is never guessed or rewritten.
         for slot=1,64 do
             local name,value=debug.getupvalue(fn,slot);if not name then break end
             if name==''then
-                if type(value)=='function'then found,index,original=visit(value,depth+1)
-                elseif type(value)=='table'then found,index,original=visit_hook(value,depth)end
-                if found then return found,index,original end
+                if type(value)=='function'then enqueue(value,depth+1)
+                elseif type(value)=='table'then hook_edges(value,depth+1)end
             end
         end
         -- Other loaders use names such as callback/dispatch. Reading Lua
         -- closure edges is harmless; only the authenticated MOM slot is patched.
         for slot=1,64 do
             local name,value=debug.getupvalue(fn,slot);if not name then break end
-            if type(value)=='function'then
-                found,index,original=visit(value,depth+1)
-                if found then return found,index,original end
-            end
+            if type(value)=='function'then enqueue(value,depth+1)end
         end
     end
-    return visit(root or rawget(env,'update'),0)
+    diagnostic.budget_exhausted=at<=#queue
+    return nil,nil,nil,diagnostic
 end
 
 function N.new(api,options)
     options=options or {};local env=options.env or _G
     local self={};local backend,verified,retired,retiring,record,parent,gameplay,wrapper,previous
-    local bridge,hud_bridge;local hud_wait=false;local last_reason
+    local bridge,hud_bridge;local hud_wait=false;local last_reason;local last_mom_scan,last_mom_detail;local last_state;local last_selection
     local function note(reason)if reason~=last_reason then last_reason=reason;if options.log then options.log('MCM native entry: '..tostring(reason))end end end
     local function initialize()
         if verified then return true end
@@ -239,8 +257,13 @@ function N.new(api,options)
     end
     local function install_bridge()
         if bridge then return true end
-        local step,slot,original=mom_step(env,options.mom_step)
-        if not step then return false end
+        local step,slot,original,scan=mom_step(env,options.mom_step)
+        last_mom_detail=scan
+        if not step then
+            local message=string.format('MODS owner scan: state=%s nodes=%d limit=%d exhausted=%s candidates=%d bar=%s tab=%s step_state=%s ensure_state=%s src=%q upvalues=%q ensure_src=%q ensure_upvalues=%q',tostring(scan.state),scan.nodes,scan.node_limit,tostring(scan.budget_exhausted),scan.candidates,tostring(scan.bar),tostring(scan.tab),tostring(scan.step_state),tostring(scan.ensure_state),scan.candidate_short_src or '',scan.candidate_upvalues or '',scan.ensure_short_src or '',scan.ensure_upvalues or '')
+            if message~=last_mom_scan then last_mom_scan=message;if options.log then options.log('MCM native entry: '..message)end end
+            return false
+        end
         local hook
         hook=function(screen,...)
             if retired then return original(screen,...)end
@@ -258,7 +281,9 @@ function N.new(api,options)
             if not result[1]then error(result[2],0)end
             return unpack(result,2,result.n)
         end
-        debug.setupvalue(step,slot,hook);bridge={step=step,slot=slot,original=original,hook=hook};return true
+        debug.setupvalue(step,slot,hook);bridge={step=step,slot=slot,original=original,hook=hook}
+        if options.log then options.log('MCM native entry: authenticated MODS owner linked (nodes='..scan.nodes..')')end
+        return true
     end
     local function release_hud_bridge()
         if not hud_bridge then return end
@@ -353,30 +378,42 @@ function N.new(api,options)
         install_bridge()
         install_hud_bridge()
         local screen,status=backend.escape_menu()
+        local transition=status..'/mods='..tostring(bridge~=nil)..'/hud='..tostring(hud_bridge~=nil)..'/slot='..tostring(hud_bridge and hud_bridge.instance.slot)
+        if transition~=last_state then last_state=transition;if options.log then options.log('MCM native entry: '..transition)end end
         if status=='closed'then
             record=nil;parent=nil
             if focused()and not(api.is_open and api.is_open())then local current=flags();if current and current.focus and not current.cursor then gameplay=current end end
             return true
         end
         if status~='open'then return true end
+        if parent and api.is_open and not api.is_open()then
+            local input=api.input_status and api.input_status()
+            if not input or not(input.active or input.pending_restore or input.owner)then parent.active=false;parent=nil end
+        end
         if record and record.screen~=screen then record=nil;parent=nil end
         if hud_wait and not record and not(hud_bridge and hud_bridge.after_place)then return false,'Waiting for native HUD+ tab placement'end
         local snapshot=backend.snapshot(screen)
         local ok,reason=publish(screen,snapshot);if not ok then note(reason);return false,reason end
         snapshot=backend.snapshot(screen)
+        local selection=snapshot.current..'/'..record.index..'/focused='..tostring(focused())..'/baseline='..tostring(gameplay~=nil)..'/open='..tostring(api.is_open and api.is_open())
+        if selection~=last_selection then last_selection=selection;if options.log then options.log('MCM native entry: selection='..selection)end end
+        if not record.logged and own(screen,snapshot)then
+            record.logged=true;note('Added owned native MCM tab: index='..record.index..' count='..snapshot.count)
+        end
         if focused()and snapshot.current==record.index and not parent and not(api.is_open and api.is_open())then
             if not gameplay then note('Waiting for a verified gameplay cursor baseline');return false,'Gameplay cursor baseline unavailable'end
             local owner=make_parent(screen,snapshot)
-            if not owner.validate()then return false,'Native MCM parent validation failed'end
+            if not owner.validate()then note('Native MCM parent validation failed');return false,'Native MCM parent validation failed'end
             if type(options.on_open)~='function'then return false,'Native MCM open callback unavailable'end
             local opened,reason=options.on_open(owner)
-            if opened~=true then return false,reason or 'Native MCM opening refused'end
+            if opened~=true then note(reason or 'Native MCM opening refused');return false,reason or 'Native MCM opening refused'end
             parent=owner
+            if options.log then options.log('MCM opened from native Escape entry')end
         end
         return true
     end
     function self.status()
-        return {verified=verified==true,installed=wrapper~=nil,retired=retired==true,retiring=retiring==true,index=record and record.index,gameplay_baseline=gameplay~=nil,parent=parent,reason=last_reason}
+        return {verified=verified==true,installed=wrapper~=nil,retired=retired==true,retiring=retiring==true,index=record and record.index,gameplay_baseline=gameplay~=nil,parent=parent,reason=last_reason,mom_scan=last_mom_detail}
     end
     function self.close()
         retiring=true

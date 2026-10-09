@@ -176,9 +176,11 @@ return {
             on_open=function(parent)
                 input.poll()
                 if not input.focused()or menu.visible or capture.status().owner then return false,'MCM input is already owned'end
+                if tonumber(native.mcm_captured())~=0 then return false,'Native input belongs to another frontend'end
                 if input.down(1)or input.down(2)then return false,'Waiting for the native menu click to release'end
                 if parent.validate()~=true then return false,'Native MCM parent could not be verified'end
-                if parent.restoration_snapshot.focus~=false or parent.restoration_snapshot.cursor~=true then return false,'Native MCM requires the mouse cursor mode'end
+                local saved=parent.restoration_snapshot
+                if type(saved.focus)~='boolean'or type(saved.cursor)~='boolean'or type(saved.clip)~='boolean'then return false,'Native MCM cursor snapshot is invalid'end
                 menu.native_parent=parent;menu.visible=true;return true
             end})
         -- Adapter cleanup restores capture first, then native selection and hook ownership.
@@ -192,6 +194,9 @@ return {
         if retired or not api then return end
         local ok,err=pcall(function()
             input.poll()
+            -- Loaders can cache their update entry; lifecycle polling still
+            -- runs even when a newly installed global wrapper is not called.
+            if native_entry then native_entry.step()end
             hud_timer=hud_timer+math.max(0,tonumber(dt)or 0)
             if hud_timer>=.25 then
                 hud_timer=0

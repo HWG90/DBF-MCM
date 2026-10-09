@@ -139,6 +139,23 @@ test('unknown named callback and dispatch wrappers reach authenticated MOM only'
     assert(f.entry.close()and f.b.count==5)
 end)
 
+test('breadth first discovery reaches nearby MOM before a large side-helper tree',function()
+    local f=fixture(0,true)
+    local function helpers(depth)
+        if depth==0 then return function()return true end end
+        local run,finish=helpers(depth-1),helpers(depth-1)
+        return function(...)if select('#',...)<0 then return run(...)end;return finish(...)end
+    end
+    local step=helpers(8) -- 511 helper closures, all shallower than the depth limit.
+    local callback=f.env.update
+    f.env.update=function(...)if select('#',...)<0 then step(...)end;return callback(...)end
+    assert(f.entry.install());f.env.update();f.open_escape();f.env.update()
+    local scan=assert(f.entry.status().mom_scan)
+    assert(f.b.count==5 and f.entry.status().index==4 and scan.nodes<20 and not scan.budget_exhausted,'side helpers exhausted discovery before nearby MOM')
+    assert(scan.candidate_short_src and scan.candidate_upvalues:find('ensure_mods_tab',1,true)and scan.step_state and scan.ensure_state)
+    assert(f.entry.close())
+end)
+
 test('matching constants on foreign MOM state do not authorize a callback rewrite',function()
     local f=fixture(0,true)
     local state={};local TAB_BAR,MODS_TAB=1248,3
@@ -148,6 +165,7 @@ test('matching constants on foreign MOM state do not authorize a callback rewrit
     local original=ensure_mods_tab
     assert(f.entry.install());f.entry.step();f.open_escape()
     local ok,why=f.entry.step();assert(not ok and why=='Waiting for cooperative MODS tab owner'and f.b.writes==0)
+    local scan=assert(f.entry.status().mom_scan);assert(scan.candidate_short_src and scan.candidate_upvalues:find('ensure_mods_tab',1,true)and not scan.step_state and not scan.ensure_state,'rejected callback diagnostics omitted its source/identity')
     local found
     for index=1,64 do local name,value=debug.getupvalue(fake_step,index);if not name then break end;if name=='ensure_mods_tab'then found=value end end
     assert(found==original,'foreign callback was patched');assert(f.entry.close())
@@ -272,6 +290,16 @@ test('cursor baseline is not cached from another owner or an open MCM',function(
     f.flags.focus=true;f.flags.cursor=true;f.entry.step();assert(not f.entry.status().gameplay_baseline)
     f.flags.cursor=false;f.set_open(true);f.entry.step();assert(not f.entry.status().gameplay_baseline)
     f.set_open(false);f.entry.step();assert(f.entry.status().gameplay_baseline);assert(f.entry.close())
+end)
+
+test('an acknowledged open can retry after capture refusal but never during pending restoration',function()
+    local f=fixture(0,true);assert(f.entry.install());f.env.update();f.open_escape();f.env.update()
+    f.b.current=f.entry.status().index;f.env.update();local first=assert(f.parent())
+    f.set_open(false);f.api.input_status=function()return {active=false,pending_restore=true,owner='mcm_restore'}end
+    f.entry.step();assert(f.parent()==first and first.active,'Pending input restoration lost its native parent')
+    f.api.input_status=function()return {active=false,pending_restore=false}end
+    f.entry.step();assert(f.parent()~=first and not first.active,'Failed capture left the tab unable to retry')
+    assert(f.entry.close())
 end)
 
 test('a replacement Escape owner releases DLL input but retains pending flags until the actual stack closes',function()

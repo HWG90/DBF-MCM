@@ -7,7 +7,9 @@ function M.new(native,window,log)
     end
     local function parent_valid(parent,saved)
         if type(parent)~='table' or type(parent.validate)~='function' or type(parent.status)~='function' or type(parent.on_close)~='function' then return false end
-        if not flags(parent.gameplay_snapshot,true,false) or not flags(parent.restoration_snapshot,false,true)then return false end
+        local saved_flags=parent.restoration_snapshot
+        if not flags(parent.gameplay_snapshot,true,false) or type(saved_flags)~='table'or
+            type(saved_flags.focus)~='boolean'or type(saved_flags.cursor)~='boolean'or type(saved_flags.clip)~='boolean'then return false end
         local ok,owned=pcall(parent.validate);if not ok or owned~=true then return false end
         if saved then for _,key in ipairs({'focus','cursor','clip'})do if parent.restoration_snapshot[key]~=saved[key]then return false end end end
         return true
