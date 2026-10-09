@@ -11,3 +11,5 @@ Use **DBF-MCM** as the short project name and **Divers' Best Friend — Mod Conf
 Use charcoal, restrained yellow accents and ivory lettering with a simple layout. Preserve the supplied helmet's silhouette and surface markings. Keep generous margins and version numbers outside the artwork.
 
 The README uses the current banner at the top. The banner was composed with the built-in image generator from the user-supplied reference; existing helmet markings were retained.
+
+The supplied helmet reference carries Galactic Armory's watermark. Helmet reference credit: [Galactic Armory](https://galacticarmory.net/). The mod framework is by Goose.
