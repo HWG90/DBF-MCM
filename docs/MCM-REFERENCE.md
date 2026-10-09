@@ -39,4 +39,4 @@ The closed menu polls only its fallback open key plus the optional manager bindi
 5. JSON author definitions and stable persistence/migration contracts. Version the API before public adoption.
 6. Explicit compatibility adapter and public examples. Migrate public HUD settings separately; keep private developer tools outside the distributable.
 
-Public naming, license, hosting and release remain unapproved. Keep the local package unpublished until the user reviews it.
+This document records the original design comparison. Current preview downloads and supported features are listed in the README and release notes. See CREDITS.md and the bundled native-helper license for third-party attribution.
