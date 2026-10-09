@@ -5,6 +5,7 @@ DBF-MCM is the Mod Configuration Menu member of the Divers' Best Friend family, 
 Use **DBF-MCM** as the short project name and **Divers' Best Friend — Mod Configuration Menu** as the full name.
 
 - `banner-goose-v2.png`: current wide header, using Goose's supplied officer helmet reference.
+- `banner-goose-nexus-header.png`: variant with extra margin for Nexus's wider header crop.
 - `banner.png` and `logo.png`: preserved original branding.
 
 Use charcoal, restrained yellow accents and ivory lettering with a simple layout. Preserve the supplied helmet's silhouette and surface markings. Keep generous margins and version numbers outside the artwork.
