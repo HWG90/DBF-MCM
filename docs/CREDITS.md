@@ -1,6 +1,6 @@
 # Credits
 
-- **HWG90** — DBF-MCM framework and native input helper.
+- **Goose** — DBF-MCM framework and native input helper.
 - **CowboyBingus** — Bingus Shared Loader and Mod Options Menu compatibility ecosystem. Shared Loader is installed separately; Mod Options Menu assets are not bundled. Native helpers are credited below.
 - **SkyUI contributors** and **Neanka / Fallout 4 MCM contributors** — inspiration for mod/page/control organization; their code and assets are not bundled. See [design references](MCM-REFERENCE.md).
 - **Arrowhead Game Studios / Stingray** — game-provided GUI, fonts and runtime resources. No game binaries or stock assets are redistributed in these packages.
