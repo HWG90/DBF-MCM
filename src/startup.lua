@@ -35,6 +35,8 @@ local function close()
 end
 local ok,err=pcall(descriptor.on_enable,ctx)
 if not ok then close();ctx.log('Startup failed: '..tostring(err));return end
+-- Include cooperative update hooks installed by on_enable.
+original_update=assert(rawget(_G,'update'),'Game update callback unavailable after activation')
 local wrapper
 wrapper=function(dt,...)
  local result=original_update(dt,...)

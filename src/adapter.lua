@@ -1,4 +1,4 @@
-local api,menu,view,registered,input,log,capture;local legacy;local diagnostic;local binding_host;local held_toggle=false;local retired=false
+local api,menu,view,registered,input,log,capture;local legacy;local hud_integration,hud_runtime,native_entry;local hud_timer=0;local hud_diagnostic;local diagnostic;local binding_host;local held_toggle=false;local retired=false
 local diagnostics,diagnostics_owner,log_context,original_log,mirror_log
 local function close()
     -- A failed external restore must keep its provider and snapshot available.
@@ -7,6 +7,13 @@ local function close()
         if ok==false then if log then log('MCM cursor restoration pending: '..tostring(reason))end;return false,reason end
         capture=nil
     end
+    if native_entry then
+        local ok,reason=native_entry.close()
+        if ok==false then if log then log('MCM native cleanup pending: '..tostring(reason))end;return false,reason end
+        native_entry=nil
+    end
+    if hud_integration then hud_integration.release();hud_integration=nil end
+    if hud_runtime then hud_runtime.release();hud_runtime=nil end
     if legacy then
         -- Capture the active provider before MDL unwinds its registered globals.
         legacy.poll(rawget(_G,'ModOptionsMenu'))
@@ -22,8 +29,8 @@ local function close()
     api,menu,input=nil,nil,nil;binding_host=nil;held_toggle=false
 end
 return {
-    name='Mod Configuration Menu (Preview)',version='0.1.53',author='HWG90',
-    description='Independent MCM-style author framework. DEL opens a keyboard/mouse preview. Not yet a native pause-menu replacement.',
+    name='Mod Configuration Menu (Preview)',version='0.1.54',author='HWG90',
+    description='Shared mod settings. DEL opens MCM; a guarded MCM tab also opens it from the Escape menu.',
     on_enable=function(ctx)
         assert(ctx.api==2 and type(ctx.global)=='function' and type(ctx.on_cleanup)=='function','MDL API 2 required')
         assert(not rawget(_G,'DBFMCM'),'Another DBFMCM instance is active')
@@ -98,12 +105,13 @@ return {
             return capture.release(token)
         end}
         function api.input_status()return capture and capture.status() or {active=false}end
-        function api.open()menu.visible=true end
+        function api.open()menu.visible=true;return true end
         function api.close()
             menu.visible=false;menu.capture=false
             if menu.release_console then menu.release_console()end
             local ok,reason=true,nil
             if capture then ok,reason=capture.release()end
+            if ok~=false then menu.native_parent=nil end
             if view then view.release()end
             return ok,reason
         end
@@ -137,12 +145,60 @@ return {
         if reason then ctx.log('MCM preferences: '..tostring(reason));menu.notice=tostring(reason)end
         if not ok then api.menu_toggle_key=46 end
         ctx.log('MCM preview enabled; menu shortcut '..MCM.menu.key_name(api.menu_toggle_key or 46)..'.')
+        hud_runtime=MCM.hud_plus_runtime.new(ctx.dir,ctx.log)
+        hud_integration=MCM.hud_plus.new(api,ctx.log);hud_timer=0
+        local recovered=hud_runtime.poll()
+        if not recovered then
+            local resource='mods/hd2_hud/hd2_hud_plus'
+            local checked,available=pcall(sr.Application.can_get,'lua',resource)
+            local cached=package.loaded[resource]
+            ctx.log('HUD+ startup: resource='..tostring(checked and available)..' cached='..type(cached)..' installed='..tostring(type(cached)=='table'and rawget(cached,'installed')or false))
+            if checked and available==true and cached==nil then
+                local started,result=pcall(require,resource)
+                ctx.log('HUD+ startup: loaded='..tostring(started)..' installed='..tostring(type(result)=='table'and result.installed or false))
+                if not started then ctx.log('HUD+ startup failure: '..tostring(result))end
+                hud_runtime.poll()
+            end
+        end
+        hud_integration.poll(hud_runtime.poll())
+        hud_diagnostic=hud_runtime.diagnostic()..'; '..hud_integration.diagnostic();ctx.log('HUD+ integration: '..hud_diagnostic)
+        native_entry=MCM.native_entry.new(api,{window=sr.Window,log=ctx.log,
+            dependencies={memory=MCM.native_memory,runtime=MCM.native_runtime},
+            focused=function()input.poll();return input.focused()end,
+            hud_menu=function()
+                local bridge=hud_runtime and hud_runtime.poll()
+                if type(bridge)=='table'and bridge.api==1 and bridge.version=='0.2.2'and
+                    type(bridge.alive)=='function'and type(bridge.native_menu)=='function'and bridge.alive()==true then
+                    return bridge.native_menu(),true
+                end
+                return nil,false
+            end,
+            on_open=function(parent)
+                input.poll()
+                if not input.focused()or menu.visible or capture.status().owner then return false,'MCM input is already owned'end
+                if input.down(1)or input.down(2)then return false,'Waiting for the native menu click to release'end
+                if parent.validate()~=true then return false,'Native MCM parent could not be verified'end
+                if parent.restoration_snapshot.focus~=false or parent.restoration_snapshot.cursor~=true then return false,'Native MCM requires the mouse cursor mode'end
+                menu.native_parent=parent;menu.visible=true;return true
+            end})
+        -- Adapter cleanup restores capture first, then native selection and hook ownership.
+        local native_ok,native_why=native_entry.install()
+        if not native_ok then ctx.log('MCM native entry unavailable: '..tostring(native_why))else ctx.log('MCM native entry: verified update hook installed')end
+        function api.integration_status()return {hud=hud_runtime and hud_runtime.diagnostic(),native=native_entry and native_entry.status()}end
+
 
     end,
     on_update=function(ctx,dt)
         if retired or not api then return end
         local ok,err=pcall(function()
             input.poll()
+            hud_timer=hud_timer+math.max(0,tonumber(dt)or 0)
+            if hud_timer>=.25 then
+                hud_timer=0
+                local bridge=hud_runtime and hud_runtime.poll()
+                if hud_integration then hud_integration.poll(bridge)end
+                if hud_runtime and hud_integration then local report=hud_runtime.diagnostic()..'; '..hud_integration.diagnostic();if report~=hud_diagnostic then hud_diagnostic=report;ctx.log('HUD+ integration: '..report)end end
+            end
             legacy.poll(rawget(_G,'ModOptionsMenu'))
             api.mount('dbf_ass_blacklist',"Diver's Best Friend")
             local report=legacy.diagnostic()
@@ -165,12 +221,13 @@ return {
             elseif focused and menu.visible and not capture.active and loader and type(loader.open_manager)=='function' then
                 menu.visible=false;ctx.log('MCM handoff refused: loader lacks safe close_manager API')
             end
-            local acquired,reason=capture.sync(menu.visible,focused,input.window())
+            local acquired,reason=capture.sync(menu.visible,focused,input.window(),menu.native_parent)
             if not acquired and (tostring(reason):find('Cannot acquire input capture',1,true)or tostring(reason):find('Input capture lost',1,true)or tostring(reason):find('Window capture unavailable',1,true))then view.release();return end
             if not acquired then menu.visible=false;menu.capture=false;capture.release();ctx.log('Menu closed: '..tostring(reason))end
             if acquired and process_input then menu.tick(input)end
             if retired or not menu then return end
             if not menu.visible and capture.active then capture.release()end
+            if not menu.visible and not capture.status().pending_restore then menu.native_parent=nil end
             menu.advance(dt)
             local w,h=stingray.Gui.resolution();view.draw(menu.compose(w,h))
         end)

@@ -1,7 +1,17 @@
 -- Capture lifetime is owned by the menu; all cursor state is restored on exit.
 local M={}
 function M.new(native,window,log)
-    local self={active=false};local snapshot;local external
+    local self={active=false};local snapshot;local external;local native_parent
+    local function flags(value,focus,cursor)
+        return type(value)=='table' and value.focus==focus and value.cursor==cursor and type(value.clip)=='boolean'
+    end
+    local function parent_valid(parent,saved)
+        if type(parent)~='table' or type(parent.validate)~='function' or type(parent.status)~='function' or type(parent.on_close)~='function' then return false end
+        if not flags(parent.gameplay_snapshot,true,false) or not flags(parent.restoration_snapshot,false,true)then return false end
+        local ok,owned=pcall(parent.validate);if not ok or owned~=true then return false end
+        if saved then for _,key in ipairs({'focus','cursor','clip'})do if parent.restoration_snapshot[key]~=saved[key]then return false end end end
+        return true
+    end
     local function restore(saved)
         if not saved then return true end
         local errors={}
@@ -36,24 +46,46 @@ function M.new(native,window,log)
         native.mcm_release()
         self.active=false
         if tonumber(native.mcm_captured())~=0 then return false,'Native input release readback failed'end
-        local ok,reason=restore(snapshot)
+        local target=snapshot
+        if native_parent then
+            local called,status=pcall(native_parent.status)
+            if not called or type(status)~='table' or status.covered then return false,'Native menu restoration pending: parent ownership unavailable'end
+            if status.closed then target=native_parent.gameplay_snapshot
+            elseif status.open then target=native_parent.restoration_snapshot
+            else return false,'Native menu restoration pending: parent state unavailable'end
+        end
+        local ok,reason=restore(target)
         if not ok then log('Menu cursor restoration pending: '..tostring(reason));return false,reason end
+        if native_parent then
+            local called,closed,why=pcall(native_parent.on_close)
+            if not called or closed~=true then return false,'Native menu restoration pending: '..tostring(called and why or closed)end
+            for _,field in ipairs({{'mouse_focus','focus'},{'show_cursor','cursor'},{'clip_cursor','clip'}})do
+                local read,value=pcall(window[field[1]])
+                if not read or value~=target[field[2]]then return false,'Native menu restoration pending: final cursor readback mismatch'end
+            end
+        end
         if snapshot then log('Menu cursor snapshot restored')end
-        snapshot=nil;return true
+        snapshot=nil;native_parent=nil;return true
     end
     function self.status()
         return {owner=external and external.owner or (self.active and 'mcm' or (snapshot and 'mcm_restore' or nil)),active=self.active,pending_restore=snapshot~=nil and not self.active}
     end
-    function self.sync(visible,focused,hwnd)
+    function self.sync(visible,focused,hwnd,parent)
         if not visible or not focused then if self.active or snapshot then return self.release()end;return true end
         if visible and external then return false,'Input lease belongs to '..external.owner end
         if snapshot and not self.active then return false,'Previous cursor restoration pending'end
+        if self.active and native_parent and not parent_valid(native_parent)then
+            self.release();return false,'Native menu context changed; MCM closed'
+        end
         if not self.active then
             for _,name in ipairs({'mouse_focus','show_cursor','clip_cursor','set_mouse_focus','set_show_cursor','set_clip_cursor'})do
                 if type(window[name])~='function' then return false,'Missing cursor API: '..name end
             end
             local saved={focus=window.mouse_focus(),cursor=window.show_cursor(),clip=window.clip_cursor()}
-            if saved.focus~=true then return false,'Game mouse focus is already disabled; close the other input owner or recover focus first'end
+            if parent then
+                if not parent_valid(parent,saved)then return false,'Native menu input ownership could not be verified'end
+                native_parent=parent
+            elseif saved.focus~=true then return false,'Game mouse focus is already disabled; close the other input owner or recover focus first'end
             snapshot=saved
             local ok,err=pcall(function()
                 assert(native.mcm_install(hwnd)~=0,'Native window capture unavailable')

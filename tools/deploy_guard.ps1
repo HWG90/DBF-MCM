@@ -45,22 +45,25 @@ function Assert-PhysicalDestination([string]$Path) {
     if(-not $physical.Equals($intended,[StringComparison]::OrdinalIgnoreCase)) {throw "Installed path was redirected: intended $intended, physical $physical"}
 }
 function Invoke-GuardedModuleDeployment {
-    param([string]$Candidate,[string]$TargetDirectory,[string]$InstalledRoot,[string]$BackupRoot,[string]$ReloadLog,[string]$ReloadMarker,[int]$VerifyDelaySeconds=5)
+    param([string]$Candidate,[string]$TargetDirectory,[string]$InstalledRoot,[string]$BackupRoot,[string]$ReloadLog,[string]$ReloadMarker,[int]$VerifyDelaySeconds=5,[switch]$AllowColdInstall)
     Assert-UnvirtualizedPath $Candidate
     $candidatePath=(Resolve-Path -LiteralPath $Candidate).Path
     $target=Assert-IntendedTarget (Join-Path $TargetDirectory 'mod.lua') $InstalledRoot
     if(-not (Test-Path -LiteralPath $target)) {throw 'Existing installed module required; first installation needs a separately reviewed package deployment'}
     Assert-PhysicalDestination $target
+    $gameRunning=[bool](Get-Process helldivers2 -ErrorAction SilentlyContinue)
+    if($AllowColdInstall -and $gameRunning) {throw 'Cold installation requires Helldivers 2 to be closed'}
+    if(-not $gameRunning -and -not $AllowColdInstall) {throw 'Game is closed; use -ColdInstall to install for the next launch'}
     $expected=(Get-FileHash -LiteralPath $candidatePath -Algorithm SHA256).Hash
     $before=(Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
     if($before -eq $expected) {
-        Start-Sleep -Seconds $VerifyDelaySeconds
+        if($gameRunning) {Start-Sleep -Seconds $VerifyDelaySeconds}
         Assert-PhysicalDestination $target
         Assert-HashEquals (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash $expected
         Write-Output "Already installed; physical destination and stable SHA-256 verified: $expected"
         return
     }
-    $oldLog=Get-Content -LiteralPath $ReloadLog -Raw
+    $oldLog=if($gameRunning) {Get-Content -LiteralPath $ReloadLog -Raw} else {''}
     $backup=Join-Path $BackupRoot ((Get-Date -Format 'yyyyMMdd-HHmmss')+'-'+[Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $backup -Force | Out-Null
     Copy-Item -LiteralPath $target -Destination (Join-Path $backup 'mod.lua')
@@ -69,12 +72,19 @@ function Invoke-GuardedModuleDeployment {
     $staging=$target+'.reviewed-'+[Guid]::NewGuid().ToString('N')+'.tmp'
     Copy-Item -LiteralPath $candidatePath -Destination $staging
     Assert-HashEquals (Get-FileHash -LiteralPath $staging).Hash $expected
+    if($AllowColdInstall -and (Get-Process helldivers2 -ErrorAction SilentlyContinue)) {Remove-Item -LiteralPath $staging;throw 'Game started during preparation; no module replaced'}
     Move-Item -LiteralPath $staging -Destination $target -Force
     Assert-PhysicalDestination $target
     Assert-HashEquals (Get-FileHash -LiteralPath $target).Hash $expected
-    Start-Sleep -Seconds $VerifyDelaySeconds
+    if($gameRunning) {Start-Sleep -Seconds $VerifyDelaySeconds}
     Assert-PhysicalDestination $target
     Assert-HashEquals (Get-FileHash -LiteralPath $target).Hash $expected
+    if(-not $gameRunning) {
+        @{candidate=$candidatePath;target=$target;physical_target=(Get-PhysicalFilePath $target);before_sha256=$before;after_sha256=$expected;rollback=$backup;reload_confirmed=$false;next_launch_required=$true} |
+            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $backup 'receipt.json') -Encoding utf8
+        Write-Output "Installed for next game launch; physical destination and SHA-256 verified: $expected. Rollback: $backup"
+        return
+    }
     $newLog=Get-Content -LiteralPath $ReloadLog -Raw
     if($newLog.Length -lt $oldLog.Length) {throw "Log rotated; reload unverified. Backup: $backup"}
     $added=$newLog.Substring($oldLog.Length)

@@ -103,7 +103,11 @@ function MODULE.install(context)
         text(32,wh-39,'DBF',23,accent);text(title_x,wh-39,'MOD CONFIGURATION',23,white)
         local title_width=measure and measure('MOD CONFIGURATION',23*s*font_scale)/s or 23*.62*17*font_scale
         local settings_x=title_x+title_width+24
-        local settings_width=math.max(112,(measure and measure('Settings',18*s*font_scale)/s or 18*.62*8*font_scale)+24)
+        local settings_size=18*s*font_scale
+        local settings_glyph_width=M.control_width('Settings',0,math.huge,0,settings_size,measure)/s
+        local settings_native_width=measure and measure('Settings',settings_size)/s or settings_glyph_width
+        -- Native word kerning and the whole-glyph viewport can disagree; fit both.
+        local settings_width=math.max(112,math.max(settings_glyph_width,settings_native_width)+26)
         rect(settings_x,wh-47,settings_width,34,hovering(settings_x,wh-47,settings_width,34)and T.field_hover or T.field)
         commands[#commands].ui_role='settings_button'
         bounded(settings_x+12,wh-38,'Settings',18,white,settings_width-24)

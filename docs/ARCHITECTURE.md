@@ -14,6 +14,8 @@
 | `compat.lua`, `legacy.lua`, `grouping.lua` | Existing registrations and authoritative presentation mounts. |
 | `authoring.lua`, `framework.lua` | Creator helpers and framework pages. |
 | `console.lua`, `adapter.lua`, `startup.lua` | Diagnostics and loader/runtime lifecycles. |
+| `integrations/hud_plus.lua`, `integrations/hud_plus_runtime.lua` | HUD+ owner storage, local bridge discovery and lifecycle. |
+| `integrations/native_entry.lua`, `native_ui/` | Verified native Escape tab, cooperating owners and licensed memory/runtime helpers. |
 
 Each menu owns one explicit state table shared by its controller, input and renderer. There are no implicit globals for UI state. Child modules load before the controller; the release builder bundles them into one `dbf_mcm/mod.lua`. The Standalone archive embeds the same runtime and native DLL.
 
