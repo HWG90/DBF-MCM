@@ -113,3 +113,30 @@ Display-only text controls can include `swatches={{rgb={255,128,0},row=1}, ...}`
 ## UI refresh behavior (0.1.53)
 
 Controls with `require_confirmation=false` commit immediately even on a confirming page. Other edits remain pending until Apply; disk failures retain the pending values and suppress callbacks. Linked presentation controls keep the referenced handle authoritative. `menu_binding_status().global_key` reports the saved Open/Close key, default 46 (DEL). Settings uses the framework's authoritative handle. Apply, Discard and Reset Setting are buttons; no secondary action shortcuts are assigned. Delete used inside text or key-binding editors is owned by the editor.
+
+
+## Camera input candidate
+
+`DBFMCM.camera_input` API 2 uses the shared native window handler and external
+input lease. `acquire()` returns a token or nil/reason and refuses competing
+menus or unfocused windows. Held movement keys do not prevent capture.
+`sample()` returns WASD, Shift/up, Ctrl/down, Escape, signed wheel units (120 per
+notch), captured mouse deltas and real-time `dt`, or nil after ownership/focus
+loss. `release()` returns true or false/reason; failed cursor restoration retains
+ownership for retry. `down(vk)` and `focused()` poll physical foreground input.
+MCM opening and provider shutdown release this capture. Consumers must release
+on scene loss, error and shutdown, and stop moving when sampling returns nil.
+Native mode 3 captures photo input; `set_focus(true)` switches the owned lease to
+menu mode 1 for `menu_sample()`, and `set_focus(false)` restores mode 3. Only one
+camera consumer may own this API. It requires the matching DLL and a normal
+game restart; consumer integration still needs its own live validation.
+
+
+Photo input API 2 candidate: `camera_input.isolated_look=true` advertises fully
+captured raw mouse motion. `sample()` includes mouse_x, mouse_y and a monotonic
+real-time dt, independent of simulation time. Native capture mode 3 captures all
+keyboard/buttons/wheel/motion; game mouse focus is disabled during the owned lease
+and restored from the original snapshot. Menu capture keeps its existing behavior.
+This replaces mode-2 passthrough for photo consumers and requires the new DLL.
+
+Photo pause protection: the native input DLL requires known session state with zero other and synchronizing peers (or zero offline connections) before invoking the engine pause setter. Unknown/error state denies pause. Freecam remains usable in multiplayer without pause. Active pause is rechecked and restored when peers join. Held keyboard and mouse input no longer blocks photo capture; prior gameplay releases are forwarded with gameplay mouse focus disabled. Each activation starts from the current gameplay camera position.

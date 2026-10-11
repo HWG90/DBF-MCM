@@ -1,7 +1,10 @@
+local camera_input
 local api,menu,view,registered,input,log,capture;local legacy;local hud_integration,hud_runtime,native_entry;local hud_timer=0;local hud_diagnostic;local diagnostic;local binding_host;local held_toggle=false;local retired=false
 local diagnostics,diagnostics_owner,log_context,original_log,mirror_log
+local log_follower,font_status
 local function close()
     -- A failed external restore must keep its provider and snapshot available.
+    if camera_input then local ok,why=camera_input.release();if ok==false then return false,why end;camera_input=nil end
     if capture then
         local ok,reason=(capture.shutdown or capture.release)()
         if ok==false then if log then log('MCM cursor restoration pending: '..tostring(reason))end;return false,reason end
@@ -24,12 +27,13 @@ local function close()
     if api and rawget(_G,'DBFMCM')==api then rawset(_G,'DBFMCM',nil)end
     if menu and menu.release_console then menu.release_console()end
     if diagnostics_owner then diagnostics.detach(diagnostics_owner);diagnostics_owner=nil end
+    if log_follower then log_follower.release();log_follower=nil end
     if log_context and log_context.log==mirror_log then log_context.log=original_log end
     log_context,original_log,mirror_log=nil,nil,nil
     api,menu,input=nil,nil,nil;binding_host=nil;held_toggle=false
 end
 return {
-    name='Mod Configuration Menu (Preview)',version='0.1.56',author='Goose',
+    name='Mod Configuration Menu (Preview)',version='0.1.57',author='Goose',
     description='Shared mod settings. DEL opens MCM; a guarded MCM tab also opens it from the Escape menu.',
     on_enable=function(ctx)
         assert(ctx.api==2 and type(ctx.global)=='function' and type(ctx.on_cleanup)=='function','MDL API 2 required')
@@ -48,15 +52,21 @@ return {
             int dbfmcm_rect(void *,long *) __asm__("GetClientRect");
             int mcm_install(void *);
             int mcm_capture(int);
+            typedef struct {int session_present,other_peers,joining_peers,connections;} MCM_PHOTO_SESSION;
+            typedef void (*MCM_PHOTO_QUERY)(MCM_PHOTO_SESSION *);
+            typedef int (*MCM_PHOTO_APPLY)(void);
+            int mcm_photo_pause_allowed(MCM_PHOTO_QUERY);
+            int mcm_photo_pause(MCM_PHOTO_QUERY,MCM_PHOTO_APPLY);
             int mcm_captured(void);
             void mcm_release(void);
             int mcm_wheel(void);
+            int mcm_mouse_x(void);int mcm_mouse_y(void);double mcm_seconds(void);
         ]])
         local user=ffi.load('user32');local kernel=ffi.load('kernel32');local process=kernel.dbfmcm_process()
         local point=ffi.new('DBFMCM_POINT[1]');local rect=ffi.new('long[4]');local foreground_process=ffi.new('unsigned long[1]')
         local sr=assert(rawget(_G,'stingray'),'Stingray unavailable');retired=false
-        diagnostics=MCM.console.shared()
         local loader=rawget(_G,'LiveLuaLoader')
+        diagnostics=MCM.console.shared(loader and loader.diagnostics)
         local path=ctx.diagnostic_log_path or (loader and loader.log_directory and loader.log_directory..'/LiveLuaLoader.log')
         diagnostics_owner=diagnostics.attach('MCM',path)
         log_context=ctx;original_log=ctx.log
@@ -82,9 +92,49 @@ return {
             package.loaded['dbf_mcm.compat_registry']=registry -- Shared storage is not an MDL-owned global.
             ctx.global('ModOptionsMenu',compat);ctx.log('MCM provides ModOptionsMenu API 1 compatibility')
         end
-        api=MCM.core.new(storage,ctx.log,MCM.grouping);MCM.authoring.install(api)
+        local runtime_mod=type(mod)=='table'and type(mod.scope)=='table'and mod.scope.MCM==MCM and mod or nil
+        local runtime_ini=storage.load('mcm_runtime')or{}
+        local runtime_config=runtime_ini
+        if runtime_mod and type(runtime_mod.config)=='table'and type(runtime_mod.config.verbose_registration)=='boolean'then runtime_config=runtime_mod.config
+        elseif type(ctx.config)=='table'and type(ctx.config.verbose_registration)=='boolean'then runtime_config=ctx.config end
+        local runtime_writer=runtime_mod or {set=function(key,value)
+            local next_values={};for k,v in pairs(runtime_ini)do next_values[k]=v end;next_values[key]=value
+            local saved,why=storage.save('mcm_runtime',next_values);if saved then runtime_ini=next_values end;return saved,why
+        end}
+        local owner_sink=MCM.console.owner_logger(loader and loader.log_directory or ctx.dir)
+        local function owner_log(id,message,level)
+            local saved,owned_path=owner_sink(id,message,level)
+            pcall(diagnostics.record,id,message,level,nil,saved and owned_path or path)
+            return saved,owned_path
+        end
+        api=MCM.core.new(storage,ctx.log,MCM.grouping,{mod_log=owner_log,verbose=MCM.preferences.verbose_registration(runtime_config)});MCM.authoring.install(api)
         api.diagnostics=diagnostics;api.diagnostics_surface=MCM.console.surface
         view=MCM.view.new(sr,nil,ctx.log);menu=MCM.menu.new(api,view.measure)
+        font_status=nil
+        menu.text_metrics=view.text_metrics
+        menu.set_command_bus(MCM.commands.for_host(api,loader,diagnostics,{get_verbose=api.get_verbose,set_verbose=function(value)return MCM.preferences.set_verbose(api,value,runtime_writer)end}))
+        local local_data=assert(os.getenv('LOCALAPPDATA'))
+        local log_roots={loader and loader.log_directory or ctx.dir,local_data..'/CowboyBingus/Helldivers2/Logs',local_data..'/MDL/Helldivers2/Logs'}
+        local log_cache={};local log_host=MCM.console.host_logs(diagnostics)
+        local function foreign_logs()
+            local current=rawget(_G,'LiveLuaLoader')
+            local found,source_keys=MCM.console.discover_logs(current and current.live_catalog or {},log_roots,{cache=log_cache})
+            for source,location in pairs(diagnostics.locations or {})do
+                local normalized=type(location)=='string'and location:gsub('\\','/'):lower()
+                if normalized and not normalized:find('..',1,true)and not normalized:match('/mcm[^/]*%.log$')and not normalized:match('/livelualoader%.log$')then
+                    for _,root in ipairs(log_roots)do local prefix=root:gsub('\\','/'):lower()..'/'
+                        if normalized:sub(1,#prefix)==prefix then found[source]=location;source_keys[source]=source;break end
+                    end
+                end
+            end
+            return log_host.filter(found,source_keys,current)
+        end
+        log_follower=MCM.console.follow_logs(diagnostics,{paths=foreign_logs,read_existing=false})
+        local font_ok,font_error=pcall(function()
+            local font_memory=MCM.native_memory.new(MCM.native_runtime)
+            view.set_font_source(MCM.ui_font.new(font_memory,'game.dll',function(address)return ffi.cast('void *',address)end))
+        end)
+        if not font_ok then ctx.log('MCM game font unavailable; using stock font: '..tostring(font_error))end
         input={}
         local foreground
         function input.down(code)return foreground and bit.band(tonumber(user.dbfmcm_key(code)),0x8000)~=0 or false end
@@ -98,12 +148,68 @@ return {
             if foreground_process[0]~=process then foreground=nil end
         end
         function input.wheel()return tonumber(native.mcm_wheel())end
+        function input.now()return tonumber(native.mcm_seconds())end
+        function input.look()return tonumber(native.mcm_mouse_x()),tonumber(native.mcm_mouse_y())end
+        function input.lock_aim()
+            sr.Window.set_mouse_focus(false)
+            return sr.Window.mouse_focus()==false
+        end
+        function input.menu_cursor(menu_focus)
+            sr.Window.set_mouse_focus(false);sr.Window.set_show_cursor(menu_focus);sr.Window.set_clip_cursor(true)
+            return sr.Window.mouse_focus()==false and sr.Window.show_cursor()==menu_focus and sr.Window.clip_cursor()==true
+        end
+        function api.photo_resolution()return sr.Gui.resolution()end
+        function api.create_photo_view()
+            local photo_view=MCM.view.new(sr,nil,ctx.log)
+            pcall(function()
+                local memory=MCM.native_memory.new(MCM.native_runtime)
+                photo_view.set_font_source(MCM.ui_font.new(memory,'game.dll',function(address)return ffi.cast('void *',address)end))
+            end)
+            return photo_view
+        end
         function input.focused()return foreground~=nil end
         function input.window()return foreground end
         api.input_lease={acquire=function(owner)return capture.acquire(owner)end,owns=function(token)return capture.owns(token)end,release=function(token)
             if token==nil then return false,'Lease token required'end
             return capture.release(token)
         end}
+        -- Retain the FFI callback with input. Called synchronously from Lua APIs,
+        -- never from the native window procedure. Exceptions leave all fields unknown.
+        local function peer_count(peers)
+            assert(type(peers)=='table','Peer enumeration unavailable')
+            local n=0;for _ in pairs(peers)do n=n+1 end;return n
+        end
+        input.photo_check=ffi.cast('MCM_PHOTO_QUERY',function(state)
+            state.session_present=-1;state.other_peers=-1;state.joining_peers=-1;state.connections=-1
+            pcall(function()
+                local N,G=assert(sr.Network),assert(sr.GameSession)
+                local session=N.game_session()
+                if session then
+                    local others=peer_count(G.other_peers(session))
+                    local joining=peer_count(G.synchronizing_peers(session))
+                    state.other_peers=others;state.joining_peers=joining;state.session_present=1
+                else
+                    state.connections=peer_count(N.connections());state.session_present=0
+                end
+            end)
+        end)
+        function input.photo_apply(apply)
+            local reason
+            local callback=ffi.cast('MCM_PHOTO_APPLY',function()
+                local ok,why=pcall(apply);reason=not ok and tostring(why) or nil
+                return ok and 1 or 0
+            end)
+            local ok,result=pcall(native.mcm_photo_pause,input.photo_check,callback)
+            callback:free()
+            return ok and result~=0,reason or (not ok and tostring(result)) or 'Pause requires a verified solo session'
+        end
+        jit.off(input.photo_apply,true)
+        camera_input=MCM.camera_input.new(native,capture,input,function()
+            local loader=rawget(_G,'LiveLuaLoader')
+            local status=loader and loader.input_status and loader.input_status()
+            return not menu.visible and not (status and status.owner)
+        end)
+        api.camera_input=camera_input
         function api.input_status()return capture and capture.status() or {active=false}end
         function api.open()menu.visible=true;return true end
         function api.close()
@@ -204,6 +310,7 @@ return {
     on_update=function(ctx,dt)
         if retired or not api then return end
         local ok,err=pcall(function()
+            if log_follower then log_follower.tick(dt)end
             input.poll()
             -- Loaders can cache their update entry; lifecycle polling still
             -- runs even when a newly installed global wrapper is not called.
@@ -237,6 +344,7 @@ return {
             elseif focused and menu.visible and not capture.active and loader and type(loader.open_manager)=='function' then
                 menu.visible=false;ctx.log('MCM handoff refused: loader lacks safe close_manager API')
             end
+            if menu.visible and camera_input then camera_input.release() end
             local acquired,reason=capture.sync(menu.visible,focused,input.window(),menu.native_parent)
             if not acquired and (tostring(reason):find('Cannot acquire input capture',1,true)or tostring(reason):find('Input capture lost',1,true)or tostring(reason):find('Window capture unavailable',1,true))then view.release();return end
             if not acquired then menu.visible=false;menu.capture=false;capture.release();ctx.log('Menu closed: '..tostring(reason))end
@@ -245,7 +353,15 @@ return {
             if not menu.visible and capture.active then capture.release()end
             if not menu.visible and not capture.status().pending_restore then menu.native_parent=nil end
             menu.advance(dt)
-            local w,h=stingray.Gui.resolution();view.draw(menu.compose(w,h))
+            local w,h=stingray.Gui.resolution()
+            if menu.visible then
+                view.refresh_font();menu.font_metric_key=view.metric_key
+                if font_status~=view.font_key then
+                    font_status=view.font_key
+                    if api.get_verbose()or font_status~='core/performance_hud/debug'then ctx.log('MCM font: '..tostring(font_status))end
+                end
+            end
+            view.draw(menu.compose(w,h))
         end)
         if not ok and not retired and menu then
             ctx.log('MCM frame failed; menu closed safely: '..tostring(err))

@@ -34,14 +34,14 @@ local function verify(menu,metric,w,h)
     local glyph_width=0
     for glyph in label.full_text:gmatch('.')do glyph_width=glyph_width+(metric and metric(glyph,label.size)or label.size*.62)end
     local native_width=metric and metric(label.full_text,label.size)or glyph_width
-    assert(label.text_width>=glyph_width,'Settings glyph budget is too small')
+    assert(label.text_width>=native_width,'Settings text budget is too small')
     assert(label.x+native_width<=button.x+button.w-12*bounds.scale+.001,'Settings native extent exceeded padding')
     assert(button.x>=bounds.x and button.x+button.w<=bounds.x+bounds.w-60*bounds.scale+.001,'Settings button exceeded minimum window bounds')
     assert(math.abs(button.h-34*bounds.scale)<.001,'Settings hit height changed with font size')
     return label,button
 end
 
--- Whole-word kerning can be narrower or wider than the sum used by text.flow.
+-- Fitting follows the whole string drawn by Gui.text, including kerning.
 for _,metric in ipairs({measure(.72),measure(1),measure(1.15),false})do
     for font_size=16,26 do
         for _,scale in ipairs({.75,1,1.5})do
@@ -58,4 +58,4 @@ for _,metric in ipairs({measure(.72),measure(1),measure(1.15),false})do
         end
     end
 end
-print('PASS full Settings label, native/glyph kerning budgets, minimum window bounds and padded hits across '..count..' font/scale/metric/resolution cases')
+print('PASS full Settings label, whole-string kerning budgets, minimum window bounds and padded hits across '..count..' font/scale/metric/resolution cases')

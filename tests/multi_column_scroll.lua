@@ -64,8 +64,9 @@ test('both columns remain complete and stable while every expanded control is re
     assert((command~=nil)==shown,'Unexpected visibility at '..offset..': '..label)
     if shown then
      counts[column]=counts[column]+1;seen[label]=true
-     local expected_y=m.window_bounds.y+(m.window_height-197-(line-effective-1)*42)*m.window_bounds.scale
-     assert(math.abs(command.y-expected_y)<.001,'Row shifted or repacked: '..label)
+     local expected_y=m.window_bounds.y+(m.window_height-197-(line-effective-1)*Menu.layout.row_step)*m.window_bounds.scale
+     local row_y=command.text_bounds and command.text_bounds.y+7*m.window_bounds.scale or command.y
+     assert(math.abs(row_y-expected_y)<.001,'Row shifted or repacked: '..label)
     end
    end
   end
@@ -73,7 +74,7 @@ test('both columns remain complete and stable while every expanded control is re
  end
  for _,expected in ipairs({f.left,f.right})do for _,label in ipairs(expected)do assert(seen[label],'Unreachable control: '..label)end end
  local at_zero=labels(f.scroll_to(0));local at_one=labels(f.scroll_to(1))
- for _,label in ipairs({'Left key 2','Right gear 3'})do assert(math.abs(at_one[label].y-at_zero[label].y-42)<.001,'Scrolling did not move one stable row')end
+ for _,label in ipairs({'Left key 2','Right gear 3'})do assert(math.abs(at_one[label].y-at_zero[label].y-Menu.layout.row_step*f.menu.window_bounds.scale)<.001,'Scrolling did not move one stable row')end
  assert(f.writes()==0,'Scrolling changed settings')
 end)
 test('wheel and scrollbar range use the longer column while the shorter column stays at bottom',function()
@@ -91,7 +92,7 @@ end)
 test('right-side pointer edits route to the actual authoritative control',function()
  local f=fixture();local found=labels(f.scroll_to(0));local label=assert(found['Right gear 1'])
  local off
- for _,c in ipairs(f.compose())do if c.type=='text' and c.text=='OFF' and math.abs(c.y-label.y)<.001 and c.x>label.x then off=c end end
+ for _,c in ipairs(f.compose())do if c.type=='text' and c.text=='OFF' and math.abs(c.y-label.y)<8*f.menu.window_bounds.scale and c.x>label.x then off=c end end
  assert(off,'Right toggle value was not rendered beside its label');f.click(off)
  assert(f.handle.get('Right_gear_1')==true and f.handle.get('Left_key_1')==false and f.writes()==1,'Right-side hit edited a different row/owner')
 end)

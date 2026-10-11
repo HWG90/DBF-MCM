@@ -1,0 +1,11 @@
+local file=assert(io.open('src/startup.lua','rb'));local source=file:read('*a');file:close()
+local start=assert(source:find('local original_shutdown=',1,true))
+local finish=assert(source:find('local ok,err=pcall(descriptor.on_enable,ctx)',start,true))
+local factory=assert(loadstring('return function(ctx,cleanup,globals)\n'..source:sub(start,finish-1)..'return close end'))()
+local calls,ready=0,false;local owned={};local old={};rawset(_G,'CaptureRetryTest',owned)
+local cleanup={function()calls=calls+1;if not ready then return false,'restore refused'end;return true end}
+local close=factory({log=function()end},cleanup,{CaptureRetryTest={previous=old,owned=owned}})
+assert(close()==false and #cleanup==1 and rawget(_G,'CaptureRetryTest')==owned)
+ready=true;assert(close()==true and #cleanup==0 and rawget(_G,'CaptureRetryTest')==old and calls==2)
+assert(close()==true and calls==2);rawset(_G,'CaptureRetryTest',nil)
+print('PASS BSL retains failed cleanup ownership, retries restoration and retires only on completion')

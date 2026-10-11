@@ -3,14 +3,25 @@ local MODULE={}
 function MODULE.install(context)
     local self,api,console,state=context.self,context.api,context.console,context.state
     local active,selectable,change,saved_notice=context.helpers.active,context.helpers.selectable,context.helpers.change,context.helpers.saved_notice
-    function self.key(code,ctrl)
+    function self.key(code,ctrl,shift)
 
         local toggle=code==(api.menu_toggle_key or 46) and not self.capture and not self.text_edit and not self.color_picker
-        if toggle then state.drag=nil;state.window_drag=nil;state.window_resize=nil;self.dropdown=nil;state.scroll_drag=nil end
+        if toggle then state.drag=nil;state.window_drag=nil;state.window_resize=nil;self.dropdown=nil;self.context_menu=nil;state.scroll_drag=nil end
 
         if toggle then self.visible=not self.visible;self.capture=false;return end
 
         if not self.visible then return end
+
+        if self.context_menu then
+            local popup=self.context_menu
+            if code==27 then self.close_context();return end
+            if code==13 or code==9 then self.run_context(popup.selected);return end
+            if code==38 or code==40 then
+                local count=#popup.items;local index=popup.selected
+                for _=1,count do index=(index-1+(code==38 and -1 or 1))%count+1;if popup.items[index].enabled then popup.selected=index;break end end
+            end
+            return
+        end
 
         if self.text_edit then
 
@@ -20,7 +31,7 @@ function MODULE.install(context)
 
             if code==9 and e.color_channel then self.finish_color_field();return end
 
-            if code==13 then
+            if code==13 or code==9 then
 
                 if e.color_channel then self.finish_color_field();return end
 
@@ -76,7 +87,7 @@ function MODULE.install(context)
 
             if code==27 then self.color_picker=nil;return end
 
-            if code==13 then self.commit_color()end;return
+            if code==13 or code==9 then self.commit_color()end;return
 
         end
 
@@ -100,7 +111,7 @@ function MODULE.install(context)
 
             end
 
-            if code==13 then
+            if code==13 or code==9 then
 
                 local ok,err=(d.mod.handle.edit or d.mod.handle.set)(d.control.id,d.selected)
 
@@ -135,7 +146,11 @@ function MODULE.install(context)
             if self.preview_window then self.preview_window=nil;state.preview_drag=nil;return end
             self.visible=false;state.scroll_drag=nil;return end
 
-        if code==9 then self.focus=self.focus=='mods' and 'settings' or 'mods';return end
+        if code==9 then
+            if not shift and (next(page.pending or {})or next(page.actions or {}))then self.apply_page(mod,page)
+            else self.focus=self.focus=='mods'and 'settings'or 'mods'end
+            return
+        end
 
         if code==33 or code==34 then
 
@@ -163,7 +178,7 @@ function MODULE.install(context)
 
     function self.wheel(delta,x,y)
 
-        if not self.visible or self.capture or not state.wheel_bounds or not x or not y then return end
+        if not self.visible or self.capture or self.context_menu or not state.wheel_bounds or not x or not y then return end
 
         if self.dropdown then
 
@@ -204,18 +219,18 @@ function MODULE.install(context)
     function self.input_focus(focused,input)
         if not focused then
             if console then console.release()end
-            state.drag=nil;state.window_drag=nil;state.window_resize=nil;state.scroll_drag=nil;self.capture=false;self.mouse_held=false;self.suspended=true;self.pointer_x,self.pointer_y=nil,nil
+            state.drag=nil;state.window_drag=nil;state.window_resize=nil;state.scroll_drag=nil;self.capture=false;self.context_menu=nil;self.mouse_held=false;self.right_held=false;self.suspended=true;self.pointer_x,self.pointer_y=nil,nil
             return false
         end
         if self.suspended then
             for code=1,255 do state.held[code]=input.down(code)end
-            self.mouse_held=input.down(1);self.suspended=false
+            self.mouse_held=input.down(1);self.right_held=input.down(2);self.suspended=false
             return false -- Do not replay keys/clicks held in another application.
         end
         return true
     end
     function self.tick(input)
-        if console then input=console.filter(input,self.visible)end
+        if console then input=console.filter(input,self.visible,state.dt or 0)end
 
         if not self.visible then
 
@@ -228,11 +243,23 @@ function MODULE.install(context)
 
         if not self.color_picker and not state.drag and not state.window_drag and not state.window_resize and not self.text_edit and input.wheel and input.mouse then local delta=input.wheel();local x,y=input.mouse();self.wheel(delta,x,y)end
 
-        for code=1,255 do local down=input.down(code);if down and not state.held[code] and code~=1 then self.key(code,input.down(17))end;state.held[code]=down end
+        for code=1,255 do local down=input.down(code);if down and not state.held[code] and code~=1 and code~=2 then self.key(code,input.down(17),input.down(16))end;state.held[code]=down end
 
         if self.visible and input.mouse then
 
-            local x,y=input.mouse();self.pointer_x,self.pointer_y=x,y;if x and y and input.down(1) and not self.mouse_held then
+            local x,y=input.mouse();self.pointer_x,self.pointer_y=x,y
+            if x and y and input.down(2)and not self.right_held then
+                if self.context_menu then self.close_context()
+                elseif not self.capture and not self.text_edit and not self.dropdown and not self.color_picker then
+                    for i=#state.hits,1,-1 do local h=state.hits[i]
+                        if x>=h.x and x<=h.x+h.w and y>=h.y and y<=h.y+h.h then
+                            if h.context_barrier then break end
+                            if type(h.right_click)=='function'then h.right_click(x,y);break end
+                        end
+                    end
+                end
+            end
+            if x and y and input.down(1) and not self.mouse_held then
 
                 local valid=self.finish_color_field()
 
@@ -333,9 +360,9 @@ function MODULE.install(context)
 
             end
 
-            self.mouse_held=input.down(1)
+            self.mouse_held=input.down(1);self.right_held=input.down(2)
 
-        else self.mouse_held=input.down(1)end
+        else self.mouse_held=input.down(1);self.right_held=input.down(2)end
 
     end
 

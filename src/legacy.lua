@@ -39,9 +39,22 @@ function M.new(api,log,core)
   if revision==registry.revision and appearance==appearance_seen then return end
   appearance_seen=appearance
   clear();revision=registry.revision
-  local names=group_keys(registry)
-  for index,source_key in ipairs(names)do
-   local source=registry.mods[source_key];local name=group_name(source_key,source)
+  -- Import by displayed group identity, not raw registry key. The original
+  -- Bingus host can expose several keys with the same displayed title.
+  -- Keep its option objects and callbacks authoritative; merge only our view.
+  local groups,by_name={},{}
+  for _,source_key in ipairs(group_keys(registry))do
+   local source=registry.mods[source_key]
+   local name=group_name(source_key,source)
+   local canonical=name:upper()
+   local group=by_name[canonical]
+   if not group then group={name=name,order={},seen={}};by_name[canonical]=group;groups[#groups+1]=group end
+   for _,option in ipairs(source.order or {})do
+    if not group.seen[option.id]then group.order[#group.order+1]=option;group.seen[option.id]=true end
+   end
+  end
+  for index,source in ipairs(groups)do
+   local name=source.name
    local direct_hud=appearance and appearance.name=='DBF-HUD'
    if not (direct_hud and (name=='DBF-HUD' or name=='DBF-HUD PLACEMENT' or name=='DBF-HUD LAYOUT EDITOR' or name=='DBF-HUD DEVELOPER')) then
    local controls={};local links={};local pending={}
@@ -54,7 +67,7 @@ function M.new(api,log,core)
    if #controls>0 or (name=='DBF-HUD' and appearance) then
     local id='bingus_'..index;local temp=core.new(nil,log)
     local handle=temp.register({id=id,name=name,description='Bingus Mod Options Menu compatibility. Confirm applies pending settings.',pages={{id='settings',name='Settings',controls=controls}}})
-    local mod=temp.mods[id];mod.legacy=true;local validate_set=handle.set;local validated_get=handle.get
+    local mod=temp.mods[id];mod.legacy=true;local validate_set=handle.set;local validated_get=handle.get;local confirm=handle.confirm
     function handle.get(key)local o=links[key];if not o then return end;if pending[key]~=nil then return pending[key]end;return host.get(o.id)end
     function handle.set(key,value)
      local o=assert(links[key],'Unknown legacy option')
@@ -68,6 +81,12 @@ function M.new(api,log,core)
      return true
     end
     mod.on_change=function(value,key) local ok,err=handle.set(key,value);if not ok then error(err) end end
+    function handle.confirm(page_id)
+     -- Profile owners can replace values through host.set without callbacks.
+     -- Compare the draft against those current values, not registration defaults.
+     for key,o in pairs(links)do mod.values[key]=host.get(o.id)end
+     return confirm(page_id)
+    end
     function handle.reset(key)return handle.set(key,links[key].default)end
     api.mods[id]=mod;imported[#imported+1]=id
    end

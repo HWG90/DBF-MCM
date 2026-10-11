@@ -7,6 +7,9 @@ for _,pair in ipairs({{'mouse_focus','focus'},{'show_cursor','cursor'},{'clip_cu
 end
 local native={mcm_install=function()return 1 end,mcm_capture=function()gate=1;return 1 end,mcm_captured=function()return gate end,mcm_release=function()if not sticky then gate=0 end end}
 local c=module.new(native,window,function()end)
+gate=1;assert(c.release() and gate==1,'inactive cleanup released another frontend')
+local foreign_ok,foreign_why=c.sync(true,true,1);assert(not foreign_ok and foreign_why:find('another frontend',1,true) and gate==1)
+gate=0
 flags.focus=false;local ok,why=c.sync(true,true,1);assert(not ok and gate==0 and why:find('already disabled',1,true))
 flags.focus=true;assert(c.sync(true,true,1));silent=true
 ok,why=c.release();assert(not ok and c.status().pending_restore and why:find('readback',1,true))

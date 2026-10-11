@@ -113,7 +113,7 @@ test('capture loss closes ownership and repeated release is safe',function()
   w[name]=function()return values[key]end;w['set_'..name]=function(value)values[key]=value end end
  local c=capture_module.new(n,w,function()end);assert(c.sync(true,true,{}));active=0
  assert(not c.sync(true,true,{}));assert(not c.active and values.focus and not values.cursor)
- c.release();c.release();assert(calls==3)
+ c.release();c.release();assert(calls==1,'inactive cleanup must not release another frontend capture')
 
 end)
 test('legacy bridge imports existing and late mods beyond eight and applies callbacks',function()
@@ -146,7 +146,7 @@ test('slider drag previews snaps clamps and commits once on release',function()
  local api=core.new({load=function()return {}end,save=function()writes=writes+1;return true end},function()end)
  api.register({id='drag',name='Drag',pages={{id='p',name='Page',require_confirmation=false,controls={{id='v',type='slider',label='Slider',min=0,max=100,step=5,default=0}}}}})
  local m=menu_module.new(api);m.visible=true;local track
- for _,c in ipairs(m.compose(1920,1080))do if c.type=='rect'and c.c[1]==31 and c.c[2]==76 and c.c[3]==84 and c.h<10 then track=c end end
+ for _,c in ipairs(m.compose(1920,1080))do if c.type=='rect'and c.ui_role=='slider_track' then track=c end end
  assert(track,'Slider track missing')
  local down=true;local px=track.x;local input={down=function(k)return k==1 and down end,mouse=function()return px,track.y end}
  m.tick(input);assert(writes==0);px=track.x+track.w;m.tick(input);assert(writes==0)
@@ -195,7 +195,8 @@ test('long dropdown scrolls independently selects once and Escape cancels',funct
  local core=assert(loadfile('src/core.lua'))();local module=assert(loadfile('src/menu.lua'))();local api=core.new(nil,function()end)
  local choices={};for i=1,37 do choices[i]='Weapon '..i end
  api.register({id='dropdown',name='Dropdown',pages={{id='p',name='Page',require_confirmation=false,controls={{id='v',type='choice',label='Weapon',choices=choices,default=1}}}}})
- local m=module.new(api);m.visible=true;m.compose(1920,1080)
+ local m=module.new(api);m.visible=true;local initial=m.compose(1920,1080)
+ for _,c in ipairs(initial)do if c.type=='text'and(c.text=='<'or c.text=='>')and c.x>m.window_bounds.x+m.sidebar_width+40 then error('Default dropdown retains selector buttons')end end
  local value=rendered_text(m,'Weapon 1');local down=true;local input={down=function(k)return k==1 and down end,mouse=function()return value.x,value.y end}
  m.tick(input);assert(m.dropdown);local commands=m.compose(1920,1080);local thumb=false
  for _,c in ipairs(commands)do if c.scrollbar=='dropdown'then thumb=true end end;assert(thumb)
@@ -204,7 +205,7 @@ test('long dropdown scrolls independently selects once and Escape cancels',funct
  down=false;m.tick(input);m.compose(1920,1080);down=true;m.tick(input);assert(m.dropdown)
  m.key(40);m.key(27);assert(not m.dropdown and api.get('dropdown','v')==9 and m.visible)
 end)
-test('popup primitives render above underlying text and choice arrows remain usable',function()
+test('popup primitives render above underlying text and explicit selectors retain usable arrows',function()
  local view=assert(loadfile('src/view.lua'))();local zs={};local world={}
  local sr={Application={worlds=function()return {world}end,main_world=function()return world end},World={create_screen_gui=function()return {}end,destroy_gui=function()end},
  Vector2=function(...)return {...}end,Vector3=function(...)return {...}end,Color=function(...)return {...}end,
@@ -212,7 +213,7 @@ test('popup primitives render above underlying text and choice arrows remain usa
  view.new(sr).draw({{type='text',x=0,y=0,text='behind',size=18,c={255,255,255},a=1},{type='rect',x=0,y=0,w=10,h=10,c={0,0,0},a=1,layer=200},{type='text',x=0,y=0,text='popup',size=18,c={255,255,255},a=1,layer=200}})
  assert(zs[2]>zs[1] and zs[3]>zs[2])
  local core=assert(loadfile('src/core.lua'))();local module=assert(loadfile('src/menu.lua'))();local api=core.new(nil,function()end)
- api.register({id='arrows',name='Arrows',pages={{id='p',name='Page',require_confirmation=false,controls={{id='v',type='choice',label='Choice',choices={'A','B'},default=1}}}}})
+ api.register({id='arrows',name='Arrows',pages={{id='p',name='Page',require_confirmation=false,controls={{id='v',type='choice',presentation='selector',label='Choice',choices={'A','B'},default=1}}}}})
  local m=module.new(api);m.visible=true;local arrow=rendered_text(m,'>');m.tick({down=function(k)return k==1 end,mouse=function()return arrow.x,arrow.y end})
  assert(api.get('arrows','v')==2 and not m.dropdown)
 end)
@@ -297,8 +298,8 @@ test('color dialog uses a higher bounded depth than the main menu',function()
  api.register({id='color_depth',name='Color Depth',pages={{id='p',name='Page',controls={{id='v',type='color',label='Color',default='#FF0000'}}}}})
  local m=module.new(api);m.visible=true;local value=rendered_text(m,'#FF0000');m.tick({down=function(k)return k==1 end,mouse=function()return value.x,value.y end})
  assert(m.color_picker);local popup=0
- for index,c in ipairs(m.compose(1920,1080))do local z=(c.layer or 100)+index*.01;assert(z<512)
-  if c.layer==300 then popup=popup+1;assert(z>200)end
+ for _,c in ipairs(m.compose(1920,1080))do local z=(c.layer or 100)+(c.type=='text'and 1 or 0);assert(z<512 and z==math.floor(z))
+  if c.popup then popup=popup+1;assert(z>=340 and z<360)end
  end
  assert(popup>10)
 end)

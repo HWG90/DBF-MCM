@@ -5,6 +5,12 @@ local Core=assert(loadfile(root..'/src/core.lua'))()
 local Menu=assert(loadfile(root..'/src/menu.lua'))()
 local Grouping=assert(loadfile(root..'/src/grouping.lua'))()
 local api=Core.new(nil,nil,Grouping)
+local Console,Commands,console_model
+local command_probe=io.open(root..'/src/commands.lua','rb')
+if command_probe then
+ command_probe:close();Console=assert(loadfile(root..'/src/console.lua'))();Commands=assert(loadfile(root..'/src/commands.lua'))()
+ console_model=Console.new();api.diagnostics=console_model;api.diagnostics_surface=Console.surface
+end
 api.menu_toggle_key=46
 local hud=api.register({id='preview_hud',name='DBF HUD',description='Representative preview controls. No installed mod or saved setting is accessed.',
  categories={{id='display',name='Display'},{id='layout',name='Layout',parent='display'},{id='profiles',name='Profiles'}},pages={
@@ -13,7 +19,7 @@ local hud=api.register({id='preview_hud',name='DBF HUD',description='Representat
   {id='enabled',type='toggle',label='Enable HUD',default=true,description='Show your weapon information while playing. Changes take effect immediately.'},
   {id='scale',type='slider',label='HUD scale',min=50,max=150,step=1,default=100,description='Adjust the size of the weapon readout. Click the number to enter an exact value.'},
   {id='opacity',type='slider',label='Background opacity',min=0,max=100,step=1,default=65,description='Set the opacity of the panel behind your weapon information.'},
-  {id='style',type='choice',label='Readout style',presentation='combined',choices={'Balanced','Compact','Expanded','Minimal','High contrast','Classic','Weapon-specific','Large type','Custom profile'},default=1,description='Choose how much weapon information appears. Use the arrows or open the list.'},
+  {id='style',type='choice',label='Readout style',presentation='combined',choices={'Balanced','Compact','Expanded','Minimal','High contrast','Classic','Weapon-specific','Large type','Custom profile'},default=1,description='Choose how much weapon information appears. Open the list to pick a style.'},
   {id='accent',type='color',label='Accent color',default='#65CDD2',description='Choose a color, enter RGB or HEX, or reuse a saved swatch.'},
   {id='profile',type='input',label='Profile name',default='Mission ready',description='Use letters, numbers, spaces, underscores or hyphens.'},
   {id='shortcut',type='keybind',label='HUD shortcut',default=72,description='Select this setting, then press a key. Escape cancels the binding.'},
@@ -86,6 +92,20 @@ assert(hud.edit('profile_enabled',true));assert(hud.edit('profile_scale',115));a
 frame('confirmation','Pending profile changes',confirmation)
 hud.discard('confirmation')
 local layout=fresh();expand(layout);layout.key(34);frame('layout','Nested page and sections',layout)
+
+if Menu.layout then
+ local spacious=fresh();spacious.window_width=1920;spacious.window_height=1080;expand(spacious);frame('spacious','Large window with nearby controls and contextual details',spacious)
+ local context=fresh();expand(context);local owner=api.mods.preview_hud
+ context.open_context({kind='control',mod=owner,page=owner.pages[1],control=owner.controls.enabled,row=1},width*.7,height*.65)
+ frame('context','Right-click setting options',context)
+ if console_model then
+  local model=console_model
+  local terminal=fresh();expand(terminal);terminal.set_command_bus(Commands.new(api));terminal.open_console()
+  model.window.command_text='mods.preview_hud.';model.window.input_focused=true
+  frame('console','Typed console and source-owned suggestions',terminal)
+  terminal.release_console();model.window.visible=false;model.window.input_focused=false
+ end
+end
 
 if Preferences then
  local settings=fresh();assert(Preferences.apply(api,settings,preferences,nil,actions));assert(settings.open_settings());frame('settings','MCM shortcuts and window settings',settings)

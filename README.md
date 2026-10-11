@@ -2,44 +2,42 @@
 
 # DBF-MCM
 
-**Divers' Best Friend — Mod Configuration Menu**, preview **0.1.56**.
+**Divers' Best Friend — Mod Configuration Menu**, preview **0.1.57**, by **Goose**.
 A shared in-game settings menu for Helldivers 2 mods.
 
-[Nexus Mods](https://www.nexusmods.com/helldivers2/mods/17157) | [GitHub downloads](https://github.com/HWG90/DBF-MCM/releases) | [Installation](docs/INSTALL-STANDALONE.md) | [Mod author quick start](docs/AUTHOR-GUIDE.md) | [API](docs/API.md) | [Credits](docs/CREDITS.md)
+[Nexus Mods](https://www.nexusmods.com/helldivers2/mods/17157) | [Ayaka](https://ayakamods.com/mods/dbf-mod-configuration-menu.4846/) | [GitHub downloads](https://github.com/HWG90/DBF-MCM/releases) | [Installation](docs/INSTALL-STANDALONE.md) | [Mod author quick start](docs/AUTHOR-GUIDE.md) | [API](docs/API.md) | [Credits](docs/CREDITS.md)
 
 ## UI polish pass
 
-Clearer page headings, quieter panels and borders, more space between settings, distinct hover/focus/enabled colors, readable key names and better Apply feedback. Enter opens dropdowns, scrollbars can be dragged, and long labels scroll only while hovered or focused. Hovering never changes a setting.
+MCM now uses the game's main font, sliding On/Off switches, clearer inactive navigation and dropdowns without side selectors. Hovered controls keep their marks visible. Controls stay close to their labels as the window grows, with spare space used for setting details. Authored two-column pages keep their own layout and scrolling.
 
-Two-column settings pages keep their controls in the correct column while scrolling. Shorter columns stop at their final rows while the longer column continues, including fully expanded Epic LUT settings.
+A pixel yellow skull and restrained hazard stripes finish the header and footer. Right-click a setting for its available actions. **Tab accepts an edit or applies pending changes**; **Shift+Tab** changes focus.
 
-**Settings** sits beside Mod Configuration. It contains the rebindable Open/Close shortcut, preferred window width/height, UI scale, font size, Reset Window and **GitHub Page**, which opens this repository in your browser after releasing menu input.
+The console starts closed. Open it with **Console** or the grave/tilde key while MCM is open. Type for suggestions, use arrows to choose one, **Tab** to complete it and **Enter** to run it. Under LLL, MCM shares the loader's commands, diagnostics and log reader. Errors retain their mod owner; `verbose_registration` is an opt-in setting for registration details.
 
-**DEL** is the default Open/Close key. Escape cancels the active editor or closes MCM. Use the mouse/wheel, or Tab, arrows and Enter. Page Up/Down changes pages. Apply, Discard and Reset Setting use buttons; no F2/F8/F9/Home action shortcuts are assigned by MCM. The menu does not pause gameplay.
+**DEL** opens/closes MCM by default and can be rebound in **Settings**. The native **MCM** Escape-menu tab also opens it. Settings includes window size, UI scale, font size, Reset Window and GitHub Page. Apply, Discard and Reset Setting are buttons. MCM does not pause gameplay.
 
 ## Installation
 
-Choose one package and one MCM instance.
+Choose one package and run one MCM instance.
 
-| Package | Loading route |
+| Download | Loader |
 | --- | --- |
-| `ModConfigurationMenu-Preview-0.1.56.zip` | **MDL API 2 or LLL**. Extract the complete `dbf_mcm` folder into the selected loader's Mods directory. |
-| `DBF-MCM-Standalone-0.1.56.zip` | **Bingus Shared Loader v15+ / API 1**. Import into Arsenal, enable alongside Shared Loader, deploy and restart. |
+| **`DBF-MCM-Standalone-0.1.57.zip` — main file** | Bingus Shared Loader v15+ / API 1. Import into Arsenal, enable with Shared Loader, deploy and restart. |
+| `ModConfigurationMenu-Preview-0.1.57.zip` — optional file | MDL API 2 **or** LLL R30+. Extract the complete `dbf_mcm` folder into your loader's Mods directory. |
 
-LLL uses the same loose package as MDL; it does not need a separate download or MDL installed. Keep `mod.lua`, `library.txt` and the named DLL together. Disable the previous MCM provider before switching. Bingus Mod Options Menu is optional. Native DLL updates require a restart.
+**MDL and LLL use the same download. LLL does not require MDL.** Keep all packaged Lua files, the manifest, config, `library.txt` and native DLL together. Disable the previous MCM provider before switching. Restart after updating MCM.
 
-Settings retain `%LOCALAPPDATA%/MDL/Helldivers2/Mods/dbf_mcm/settings`, including when MDL is absent. Mods can supply their own storage provider. Existing IDs, linked settings and HUD preview pop-outs are preserved.
+LLL saves values in `%LOCALAPPDATA%/LLL/Helldivers2/Settings/dbf_mcm`, reading existing MDL values as fallback. MDL/Shared Loader retain `%LOCALAPPDATA%/MDL/Helldivers2/Mods/dbf_mcm/settings`. Mod-supplied storage providers, stable setting IDs and linked settings are preserved.
 
 ## For mod authors
 
-Start with the [short working example](docs/AUTHOR-GUIDE.md). API 1 supports toggles, sliders, choices, keybinds, text input, colors, actions, sections, pages and categories. Stable IDs identify saved values. Callbacks run after successful persistence; failed saves leave values unchanged.
+Start with the [short working example](docs/AUTHOR-GUIDE.md). API 1 supports switches, explicit checkboxes, sliders, choices, keybinds, text, colors, actions, sections, pages and categories. Stable IDs identify saved values; failed saves leave values unchanged.
 
-Source is organized into registration/storage, preferences, controller, input, rendering, text layout, styling, compatibility and platform actions. Builds combine these modules into the existing single-file runtime. See [architecture](docs/ARCHITECTURE.md).
+Source is split into registration/storage, preferences, controller, input, rendering, layout, styling, compatibility and platform modules. LLL loads the modules directly; MDL/Shared Loader use a generated bundle. See [architecture](docs/ARCHITECTURE.md) and [logging](docs/DIAGNOSTICS.md).
 
-## Validation and limits
+HUD+ 0.2.2 integration requires the local owner bridge in [integration setup](docs/INTEGRATIONS.md). Its code and assets are not included.
 
-Offline contracts, native policy checks, package compilation and integrity checks pass. Exact startup, fonts, cursor behavior and appearance still need live verification for each route. See [release notes](docs/RELEASE-0.1.56.md).
+## Preview status
 
-HUD+ 0.2.2 integration exposes 41 settings in three pages through a locally prepared owner bridge. Changes use HUD+'s existing settings file and apply methods. Its original code and assets stay in your HUD+ installation; see [integration setup](docs/INTEGRATIONS.md).
-
-MCM registers its own native Escape-menu tab using the Mod Options Menu approach, with guarded HUD+/MODS coexistence and cursor restoration. The tab is confirmed visible and opens MCM in the current LLL session. Version 0.1.56 requests the game's normal Escape-menu close before opening MCM; that final handoff still needs live confirmation. Controller navigation is not provided, and intermittent dropdown text loss remains a live investigation.
+Main-font rendering and console behavior are confirmed in LLL. Layout, input, logging and package checks run offline; each loader still needs its own live validation. Controller navigation is not provided. See [release notes](docs/RELEASE-0.1.57.md).

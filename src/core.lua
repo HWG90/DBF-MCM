@@ -38,8 +38,24 @@ local function normalize(c,v)
     error('Control has no stored value')
 end
 local function stored(c)return c.type=='input' or c.type=='toggle' or c.type=='slider' or c.type=='choice' or c.type=='keybind' or c.type=='color'end
-function M.new(store,log,grouping)
-    local api={api=1,version='0.1.56',color_hex=M.color_hex,color_rgb=M.color_rgb,hsv_rgb=M.hsv_rgb,rgb_hsv=M.rgb_hsv,mods={},revision=0};log=log or function()end
+function M.new(store,log,grouping,options)
+    local api={api=1,version='0.1.57',color_hex=M.color_hex,color_rgb=M.color_rgb,hsv_rgb=M.hsv_rgb,rgb_hsv=M.rgb_hsv,mods={},revision=0};log=log or function()end
+    options=options or {};local verbose_override
+    local function safe_id(value)return type(value)=='string'and #value<=80 and value:match('^[%w_-]+$')~=nil end
+    local function owned_log(owner,message,level)
+        if safe_id(owner)and type(options.mod_log)=='function'then
+            local ok,result=pcall(options.mod_log,owner,message,level or 'error')
+            if ok and result~=false then return end
+        end
+        -- Logging must not interrupt persistence, callbacks or a registration error.
+        pcall(log,message)
+    end
+    function api.get_verbose()
+        if verbose_override~=nil then return verbose_override end
+        if type(options.verbose)=='function'then local ok,value=pcall(options.verbose);return ok and value==true end
+        return options.verbose==true
+    end
+    function api.set_verbose(value)assert(type(value)=='boolean','Verbose flag must be boolean');verbose_override=value;return value end
     api.storage_per_mod=true;api.presentation_links=true;api.text_swatches=true;api.category_page_links=true
     local palette=store and store.load('mcm_custom_palette') or {};local swatches={}
     for i=1,12 do local ok,v=pcall(M.color_hex,palette['swatch_'..i]);if ok then swatches[#swatches+1]=v end end
@@ -58,7 +74,7 @@ function M.new(store,log,grouping)
         if store then local ok,err=store.save('mcm_custom_palette',values);if not ok then return false,err end end
         swatches=next_colors;return true
     end
-    function api.register(spec)
+    local function register(spec)
         assert(type(spec)=='table','Expected mod definition');id(spec.id);plain(spec.name);if spec.parent_name then plain(spec.parent_name)end
         local store=spec.storage or store
         assert(not store or(type(store.load)=='function'and type(store.save)=='function'),'Invalid mod storage provider')
@@ -126,18 +142,24 @@ function M.new(store,log,grouping)
         end
         api.mods[mod.id]=mod;api.revision=api.revision+1
         local handle={id=mod.id}
+        local function validate(c,value)
+            if not c.validate then return end
+            local ok,result=pcall(c.validate,value)
+            if not ok then owned_log(mod.id,'Validation callback failed for '..mod.id..'.'..c.id..': '..tostring(result),'error');error(result,0)end
+            assert(result~=false,'Value rejected by mod')
+        end
         function handle.get(key)assert(mod.controls[key],'Unknown control');return mod.values[key]end
         function handle.set(key,value)
             assert(api.mods[mod.id]==mod,'Retired registration')
             local c=assert(mod.controls[key],'Unknown control');assert(stored(c),'Control is not a setting')
             assert(not c.disabled,'Control disabled');value=normalize(c,value)
-            if c.validate then assert(c.validate(value)~=false,'Value rejected by mod')end
+            validate(c,value)
             if value==mod.values[key]then return true end
             local next_values=copy(mod.values);next_values[key]=value
-            if store then local ok,err=store.save(mod.id,next_values);if not ok then log('Save failed for '..mod.id..'.'..key..': '..tostring(err));return false,err end end
+            if store then local ok,err=store.save(mod.id,next_values);if not ok then owned_log(mod.id,'Save failed for '..mod.id..'.'..key..': '..tostring(err),'error');return false,err end end
             local old=mod.values[key];mod.values=next_values
             for _,callback in ipairs({c.on_change or false,mod.on_change or false})do
-                if callback then local ok,err=pcall(callback,value,key,old);if not ok then log('Callback failed for '..mod.id..'.'..key..': '..tostring(err))end end
+                if callback then local ok,err=pcall(callback,value,key,old);if not ok then owned_log(mod.id,'Callback failed for '..mod.id..'.'..key..': '..tostring(err),'error')end end
             end
             api.revision=api.revision+1;log('Setting committed: '..mod.id..'.'..key);return true
         end
@@ -150,7 +172,7 @@ function M.new(store,log,grouping)
             local c=assert(mod.controls[key],'Unknown control')
             if c.require_confirmation==false or not c.page.require_confirmation then return handle.set(key,value)end
             assert(stored(c) and not c.disabled,'Setting unavailable');value=normalize(c,value)
-            if c.validate then assert(c.validate(value)~=false,'Value rejected by mod')end
+            validate(c,value)
             if value==handle.get(key)then c.page.pending[key]=nil else c.page.pending[key]=value end
             return true
         end
@@ -169,16 +191,16 @@ function M.new(store,log,grouping)
             local p=page_by_id(page_id);local next_values=copy(mod.values);local changes={}
             for _,c in ipairs(p.controls)do local v=p.pending[c.id]
                 if v~=nil then assert(not c.disabled,'Setting disabled');v=normalize(c,v)
-                    if c.validate then assert(c.validate(v)~=false,'Value rejected by mod')end
+                    validate(c,v)
                     if v~=mod.values[c.id] then next_values[c.id]=v;changes[#changes+1]={c=c,v=v,old=mod.values[c.id]}end
                 end
                 if p.actions[c.id] then assert(not c.disabled,'Action disabled')end
             end
-            if #changes>0 and store then local ok,err=store.save(mod.id,next_values);if not ok then log('Save failed for '..mod.id..'/'..p.id..': '..tostring(err));return false,err end end
+            if #changes>0 and store then local ok,err=store.save(mod.id,next_values);if not ok then owned_log(mod.id,'Save failed for '..mod.id..'/'..p.id..': '..tostring(err),'error');return false,err end end
             mod.values=next_values;p.pending={}
             for _,change in ipairs(changes)do
                 for _,callback in ipairs({change.c.on_change or false,mod.on_change or false})do
-                    if callback then local ok,err=pcall(callback,change.v,change.c.id,change.old);if not ok then log('Callback failed: '..tostring(err))end end
+                    if callback then local ok,err=pcall(callback,change.v,change.c.id,change.old);if not ok then owned_log(mod.id,'Callback failed for '..mod.id..'.'..change.c.id..': '..tostring(err),'error')end end
                 end
             end
             local actions=p.actions;p.actions={};api.revision=api.revision+1
@@ -195,15 +217,15 @@ function M.new(store,log,grouping)
             for key in pairs(values)do keys[#keys+1]=key end;table.sort(keys)
             for _,key in ipairs(keys)do
                 local c=assert(mod.controls[key],'Unknown control');assert(stored(c) and not c.disabled,'Setting unavailable')
-                local value=normalize(c,values[key]);if c.validate then assert(c.validate(value)~=false,'Value rejected by mod')end
+                local value=normalize(c,values[key]);validate(c,value)
                 if value~=mod.values[key]then next_values[key]=value;changes[#changes+1]={c=c,key=key,v=value,old=mod.values[key]}end
             end
             if #changes==0 then return true end
-            if store then local ok,err=store.save(mod.id,next_values);if not ok then return false,err end end
+            if store then local ok,err=store.save(mod.id,next_values);if not ok then owned_log(mod.id,'Save failed for '..mod.id..' batch: '..tostring(err),'error');return false,err end end
             mod.values=next_values
             for _,change in ipairs(changes)do
                 for _,callback in ipairs({change.c.on_change or false,mod.on_change or false})do
-                    if callback then local ok,err=pcall(callback,change.v,change.key,change.old);if not ok then log('Callback failed: '..tostring(err))end end
+                    if callback then local ok,err=pcall(callback,change.v,change.key,change.old);if not ok then owned_log(mod.id,'Callback failed for '..mod.id..'.'..change.key..': '..tostring(err),'error')end end
                 end
             end
             api.revision=api.revision+1;log('Settings batch committed: '..mod.id..' ('..#changes..' settings)');return true
@@ -213,11 +235,24 @@ function M.new(store,log,grouping)
             assert(api.mods[mod.id]==mod,'Retired registration')
             local c=assert(mod.controls[key],'Unknown control');assert(c.type=='button' and not c.disabled,'Button unavailable')
             local ok,result=pcall(c.on_activate)
-            log((ok and 'Action completed: 'or 'Action failed: ')..mod.id..'.'..key..(not ok and (': '..tostring(result))or ''))
+            if ok then log('Action completed: '..mod.id..'.'..key)else owned_log(mod.id,'Action failed: '..mod.id..'.'..key..': '..tostring(result),'error')end
             return ok,result
         end
         function handle.unregister()if api.mods[mod.id]==mod then api.mods[mod.id]=nil;api.revision=api.revision+1 end end
         mod.handle=handle;return handle
+    end
+    function api.register(spec)
+        local ok,result=pcall(register,spec)
+        if not ok then
+            local owner=type(spec)=='table'and rawget(spec,'id')or nil
+            owned_log(safe_id(owner)and owner or nil,'Registration failed: '..tostring(result),'error')
+            error(result,0)
+        end
+        if api.get_verbose()then
+            local mod=api.mods[result.id];local controls=0;for _,page in ipairs(mod.pages)do controls=controls+#page.controls end
+            owned_log(mod.id,'Registered mod: '..mod.id..' ('..#mod.pages..' pages, '..#mod.categories..' categories, '..controls..' controls)','debug')
+        end
+        return result
     end
     function api.mount(mod_id,parent_name)
         local mod=api.mods[mod_id];if not mod then return false end;plain(parent_name)

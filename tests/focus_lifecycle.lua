@@ -14,7 +14,7 @@ local function put(fn,wanted,value)
 end
 put(adapter.on_update,'input',input);put(adapter.on_update,'api',api);put(adapter.on_update,'menu',menu);put(adapter.on_update,'capture',capture)
 put(adapter.on_update,'legacy',{poll=function()end,diagnostic=function()return 'stable'end,release=function()end})
-put(adapter.on_update,'diagnostic','stable');put(adapter.on_update,'view',{draw=function()end,release=function()end})
+put(adapter.on_update,'diagnostic','stable');put(adapter.on_update,'view',{draw=function()end,release=function()end,refresh_font=function()end})
 stingray={Gui={resolution=function()return 1920,1080 end}}
 LiveLuaLoader={close_manager=function()closes=closes+1;return true end}
 local ctx={log=function(message)error('Unexpected adapter error: '..message)end}

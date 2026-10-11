@@ -27,20 +27,29 @@ function ctx.log(message)local f=io.open(base..'/MCM-startup.log','a');if f then
 function ctx.global(name,value)globals[name]={previous=rawget(_G,name),owned=value};rawset(_G,name,value);return value end
 function ctx.on_cleanup(fn)cleanup[#cleanup+1]=fn end
 local original_update=assert(rawget(_G,'update'),'Game update callback unavailable')
-local original_shutdown=rawget(_G,'shutdown');local retired=false
+local original_shutdown=rawget(_G,'shutdown');local retired=false;local closing=false
 local function close()
- if retired then return end;retired=true
- for i=#cleanup,1,-1 do local ok,err=pcall(cleanup[i]);if not ok then ctx.log(err)end end
+ if retired then return true end;closing=true
+ local pending=false
+ for i=#cleanup,1,-1 do
+  local ok,result,why=pcall(cleanup[i])
+  if not ok or result==false then pending=true;ctx.log('Cleanup pending: '..tostring(ok and why or result))
+  else table.remove(cleanup,i)end
+ end
+ if pending then return false end
+ retired=true
  for name,record in pairs(globals)do if rawget(_G,name)==record.owned then rawset(_G,name,record.previous)end end
+ return true
 end
 local ok,err=pcall(descriptor.on_enable,ctx)
-if not ok then close();ctx.log('Startup failed: '..tostring(err));return end
+if not ok then local complete=close();ctx.log('Startup failed: '..tostring(err));if complete then return end end
 -- Include cooperative update hooks installed by on_enable.
 original_update=assert(rawget(_G,'update'),'Game update callback unavailable after activation')
 local wrapper
 wrapper=function(dt,...)
  local result=original_update(dt,...)
- if not retired then local worked,why=pcall(descriptor.on_update,ctx,dt);if not worked then ctx.log(why);close()end end
+ if closing and not retired then close()
+ elseif not retired then local worked,why=pcall(descriptor.on_update,ctx,dt);if not worked then ctx.log(why);close()end end
  return result
 end
 rawset(_G,'update',wrapper)
@@ -48,5 +57,5 @@ rawset(_G,'shutdown',function(...)
  close();if rawget(_G,'update')==wrapper then rawset(_G,'update',original_update)end
  if type(original_shutdown)=='function' then return original_shutdown(...)end
 end)
-ctx.log('Shared Loader startup enabled; MDL is optional and must not run a second MCM instance.')
+ctx.log(closing and 'Startup cleanup pending; restoration retries remain active.' or 'Shared Loader startup enabled; MDL is optional and must not run a second MCM instance.')
 return descriptor

@@ -17,7 +17,7 @@ assert(b.x+b.w<=1920 and b.y+b.h<=1080)
 -- Southwest keeps the opposite corner anchored and clamps minimum dimensions.
 press(b.x+2,b.y+2);move(4000,4000);release();b=m.window_bounds
 assert(m.window_width==1100 and m.window_height==600)
-assert(m.settings_visible==5 and m.tree_visible==10)
+assert(m.settings_visible==math.floor((600-356)/ui.layout.row_step)and m.tree_visible==10)
 -- Title drag clamps position without changing dimensions.
 press(b.x+100,b.y+b.h-30);move(-4000,-4000);release();b=m.window_bounds
 assert(b.x==0 and b.y==0 and b.w==1100 and b.h==600)
@@ -45,4 +45,10 @@ m.key(46);assert(#compose()==0);m.recover();assert(not m.visible)
 -- Changing monitor resolution clamps the saved geometry to current bounds.
 m.visible=true;m.compose(800,600);b=m.window_bounds
 assert(b.x>=0 and b.y>=0 and b.x+b.w<=800 and b.y+b.h<=600)
+-- Minimized/unavailable resolutions cannot corrupt the saved geometry.
+local saved_w,saved_h,saved_x,saved_y=m.window_width,m.window_height,m.window_x,m.window_y
+for _,screen in ipairs({{0,0},{0,600},{800,0},{-1,600},{math.huge,600},{0/0,600}})do
+ assert(#m.compose(screen[1],screen[2])==0)
+ assert(m.window_width==saved_w and m.window_height==saved_h and m.window_x==saved_x and m.window_y==saved_y)
+end
 print('PASS corner resizing, screen/minimum bounds, title drag, resized value hits, scroll budget, compact preview, close and resolution change')

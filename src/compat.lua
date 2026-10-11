@@ -2,6 +2,32 @@
 local M={}
 function M.new(store,shared)
     local state=shared or {mods={},options={},callbacks={},values={},revision=0}
+    -- Bingus may register mixed-case titles before this compatibility host
+    -- takes over. Normalize group keys as well as new registrations; retain
+    -- authoritative option objects, values and callbacks.
+    local names={};for name in pairs(state.mods)do if type(name)=='string'then names[#names+1]=name end end
+    table.sort(names)
+    local normalized,seen,changed={},{},false
+    for _,name in ipairs(names)do
+        local title=name:upper();local source=state.mods[name]
+        local target=normalized[title]
+        if not target then
+            target={};for k,v in pairs(source)do target[k]=v end
+            target.title=title;target.order={};normalized[title]=target;seen[title]={}
+        else changed=true end
+        if name~=title then changed=true end
+        for _,option in ipairs(source.order or {})do
+            if not seen[title][option.id]then
+                target.order[#target.order+1]=option;seen[title][option.id]=true
+                option.mod=title
+            end
+        end
+    end
+    if changed then
+        for _,name in ipairs(names)do state.mods[name]=nil end
+        for title,group in pairs(normalized)do state.mods[title]=group end
+        state.revision=state.revision+1
+    end
     local persisted=store and store.load('legacy_options') or {}
     local api={api=1,version=2,max_mods=10000,max_options=10000,mcm_compat=true}
     local function key(id)return 'o_'..id:gsub('.',function(c)return string.format('%02x',c:byte())end)end

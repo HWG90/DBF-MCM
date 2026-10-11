@@ -45,6 +45,9 @@ function M.new(native,window,log)
         end
         -- Menu cleanup cannot alter another owner's cursor or native gate.
         if external then return false,'Input lease belongs to another owner'end
+        -- An inactive instance must not release the shared DLL gate belonging
+        -- to another frontend. A retained snapshot is our retry ownership.
+        if not self.active and not snapshot and not native_parent then return true end
         native.mcm_release()
         self.active=false
         if tonumber(native.mcm_captured())~=0 then return false,'Native input release readback failed'end
@@ -80,6 +83,7 @@ function M.new(native,window,log)
             self.release();return false,'Native menu context changed; MCM closed'
         end
         if not self.active then
+            if tonumber(native.mcm_captured())~=0 then return false,'Native input capture belongs to another frontend'end
             for _,name in ipairs({'mouse_focus','show_cursor','clip_cursor','set_mouse_focus','set_show_cursor','set_clip_cursor'})do
                 if type(window[name])~='function' then return false,'Missing cursor API: '..name end
             end
@@ -105,6 +109,7 @@ function M.new(native,window,log)
                 assert(window.set_mouse_focus(false)~=false,'Mouse focus maintenance refused')
                 assert(window.set_show_cursor(true)~=false,'Cursor visibility maintenance refused')
                 assert(window.set_clip_cursor(true)~=false,'Cursor clipping maintenance refused')
+                assert(window.mouse_focus()==false and window.show_cursor()==true and window.clip_cursor()==true,'Cursor maintenance readback failed')
             end)
             if not ok then self.release();return false,tostring(why)end
             if native.mcm_captured()==0 then self.release();return false,'Input capture lost'end

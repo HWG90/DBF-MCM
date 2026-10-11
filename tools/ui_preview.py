@@ -85,15 +85,18 @@ def render(commands: list[dict], width: int, height: int, fonts: Fonts) -> Image
     ordered = sorted(enumerate(commands), key=lambda item: ((item[1].get("layer", 100) + (1 if item[1]["type"] == "text" else 0)), item[0]))
     for _, command in ordered:
         kind = command["type"]
-        if kind not in {"rect", "text"}:
+        if kind not in {"rect", "text", "triangle"}:
             raise ValueError(f"Unsupported compose primitive: {kind}")
         color = tuple(max(0, min(255, round(float(v)))) for v in command["c"])
         alpha = max(0, min(255, round(command.get("a", 1) * 255)))
         fill = color + (alpha,)
-        x, y = float(command["x"]), float(command["y"])
+        x, y = float(command.get("x",0)), float(command.get("y",0))
         overlay = Image.new("RGBA", canvas.size)
         draw = ImageDraw.Draw(overlay)
-        if kind == "rect":
+        if kind == "triangle":
+            points=command["points"]
+            draw.polygon([(points[i],height-points[i+1]) for i in range(0,6,2)],fill=fill)
+        elif kind == "rect":
             w, h = float(command["w"]), float(command["h"])
             if w <= 0 or h <= 0:
                 continue
@@ -101,6 +104,8 @@ def render(commands: list[dict], width: int, height: int, fonts: Fonts) -> Image
         else:
             # Native Stingray glyph metrics/materials differ; baseline is approximate.
             draw.text((x, height-y), str(command["text"]), font=fonts.get(command.get("size", 20)), fill=fill, anchor="ls")
+            if command.get("text_bold"):
+                draw.text((x+.65, height-y), str(command["text"]), font=fonts.get(command.get("size", 20)), fill=fill, anchor="ls")
         canvas = Image.alpha_composite(canvas, overlay)
     draw = ImageDraw.Draw(canvas)
     draw.text((20, height-18), "OFFLINE COMPOSE PREVIEW  |  Representative controls  |  Approximate fonts; live game rendering unverified", font=fonts.get(15), fill=(155, 167, 175, 255), anchor="ls")

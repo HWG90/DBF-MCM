@@ -7,6 +7,21 @@ local reserved={[9]=true,[13]=true,[16]=true,[17]=true,[18]=true,[27]=true,[33]=
  [37]=true,[38]=true,[39]=true,[40]=true,[91]=true,[92]=true,[160]=true,[161]=true,[162]=true,[163]=true,[164]=true,[165]=true}
 local function copy(value)local result={};for key,item in pairs(value)do result[key]=item end;return result end
 function P.defaults()return copy(defaults)end
+-- Loader config controls diagnostic verbosity without changing saved UI values.
+function P.config_defaults()return {verbose_registration=false}end
+function P.verbose_registration(config)
+ return type(config)=='table'and config.verbose_registration==true or false
+end
+function P.set_verbose(api,value,context)
+ assert(type(value)=='boolean','Verbose registration flag must be boolean')
+ assert(api and type(api.set_verbose)=='function','MCM runtime diagnostics unavailable')
+ if context and type(context.set)=='function'then
+  local called,accepted,why=pcall(context.set,'verbose_registration',value)
+  if not called or accepted==false then return false,tostring(called and why or accepted)end
+ end
+ api.set_verbose(value)
+ return true,'Verbose registration '..(value and 'enabled'or 'disabled')
+end
 function P.valid_key(value)
  return type(value)=='number' and value==value and value%1==0 and value>=8 and value<=254 and not reserved[value]
 end

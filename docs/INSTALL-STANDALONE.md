@@ -1,27 +1,34 @@
-# MCM installation paths
+# Install MCM 0.1.57
 
-## Live Lua Loader (LLL): loose package
+Use one MCM instance. Disable the old provider before switching loaders, and restart Helldivers after updating.
 
-[Live Lua Loader](https://github.com/HWG90/LLL) provides a context-adapter lifecycle compatible with MCM. Its authoritative [R18 mod guide](https://github.com/HWG90/LLL/blob/main/docs/MOD-MIGRATION.md) documents folder discovery, the API 2 context subset and cleanup polling.
+## Bingus Shared Loader — main download
 
-1. Install LLL following its [release instructions](https://github.com/HWG90/LLL/releases). Use one startup/shared loader; avoid competing loader archives.
-2. Disable the old MCM instance and remove/disable its startup archive before switching. LLL also scans MDL/Bingus folders, so avoid duplicate enabled copies.
-3. Download **ModConfigurationMenu-Preview-0.1.56.zip** from [Nexus Mods](https://www.nexusmods.com/helldivers2/mods/17157) or [GitHub](https://github.com/HWG90/DBF-MCM/releases). Extract its `dbf_mcm` folder to `%LOCALAPPDATA%/LLL/Helldivers2/Mods`.
-4. Keep `mod.lua`, `library.txt` and the manifest-named `mcm_input_*.dll` in that folder. Install the complete folder; a lone Lua file cannot load the native capture helper.
-5. Enable `live/dbf_mcm` through LLL if necessary, then press the configured key (DEL by default). Check LLL's logs for loading errors and test normal close, focus loss and input restoration.
+1. Install **Bingus Shared Loader v15+ / API 1**.
+2. Import **DBF-MCM-Standalone-0.1.57.zip** into Arsenal.
+3. Enable MCM alongside Shared Loader, deploy and restart.
+4. Open MCM with **DEL** or the **MCM** Escape-menu tab.
 
-MDL is not required on this path. MCM uses only the supported context subset; this is not a claim that LLL supports every MDL mod. MCM values remain in `%LOCALAPPDATA%/MDL/Helldivers2/Mods/dbf_mcm/settings` to preserve existing settings even when MDL is absent. LLL owns its separate lifecycle settings and logs.
+MDL and Bingus Mod Options Menu are not required. The native helper is bundled and extracted to `%LOCALAPPDATA%/DBF/MCM`. Startup logs are in `MCM-startup.log` there.
 
-LLL live reload replaces Lua lifecycle code. It does not unload/reload an already loaded native DLL, rebuild fonts/materials, or deploy compiled game archives. Native helper updates need a normal restart; game assets need their usual mod-manager deployment and restart. The adapter supports this route; a clean exact 0.1.56 installation remains unverified.
+## LLL or MDL — the same optional download
 
-## Bingus Shared Loader: standalone archive
+Download **ModConfigurationMenu-Preview-0.1.57.zip** from [Nexus](https://www.nexusmods.com/helldivers2/mods/17157), [Ayaka](https://ayakamods.com/mods/dbf-mod-configuration-menu.4846/) or [GitHub](https://github.com/HWG90/DBF-MCM/releases).
 
-Requires Bingus Shared Loader. MDL and Bingus Mod Options Menu are not required for this variant.
+| Loader | Extract `dbf_mcm` into |
+| --- | --- |
+| [LLL R30+](https://github.com/HWG90/LLL/releases) | `%LOCALAPPDATA%/LLL/Helldivers2/Mods` |
+| MDL API 2 | `%LOCALAPPDATA%/MDL/Helldivers2/Mods` |
 
-1. Disable the MCM instance in MDL before deploying this package. Run only one MCM instance.
-2. Import the Standalone ZIP into Arsenal, enable it alongside Shared Loader, deploy and restart.
-3. Press the configured key (DEL by default). Verify menu input, close/reopen, Appearance preview, settings persistence and third-party pages.
+Copy the **whole folder**, including `main.lua`, `mod.lua`, `manifest.json`, `config`, `src`, `library.txt` and the named `mcm_input_*.dll`. LLL uses the modular entry; MDL uses the bundled entry. **LLL does not require MDL or a separate MCM download.**
 
-The native input library is bundled inside the startup entry and extracted into `%LOCALAPPDATA%/DBF/MCM` on first launch. Settings currently use the same `%LOCALAPPDATA%/MDL/Helldivers2/Mods/dbf_mcm/settings` directory as the MDL variant to retain existing values; MDL does not have to be installed for that directory to work. Startup logs are in `%LOCALAPPDATA%/DBF/MCM/MCM-startup.log`.
+Enable `live/dbf_mcm` in LLL if necessary, restart, then press **DEL**. LLL also discovers some other loader folders, so avoid duplicate enabled MCM copies.
 
-The existing MDL ZIP remains an optional alternative for live reload. Startup compilation and archive checks do not prove live loading or input behavior. This standalone variant still needs the live installation test above.
+## Settings and updates
+
+- **LLL:** `%LOCALAPPDATA%/LLL/Helldivers2/Settings/dbf_mcm`. Existing MDL INI values are read as fallback when no LLL value file exists.
+- **MDL/Shared Loader:** `%LOCALAPPDATA%/MDL/Helldivers2/Mods/dbf_mcm/settings`. MDL does not need to be installed for Shared Loader to use this folder.
+
+Keep your settings when replacing the mod folder. LLL's `config.cfg` contains `verbose_registration` and loader-owned preferences; edit the saved config, not packaged defaults. Native helpers and MCM's startup hooks require a normal game restart.
+
+After installation, check open/close, cursor restoration, saved settings and your third-party pages. Offline package checks do not prove every loader's live behavior.
