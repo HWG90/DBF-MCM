@@ -60,14 +60,21 @@ local function keyboard(bytes)
 end
 function N.replace_keyboard(bytes,code)
  local current,why=keyboard(bytes);if not current then return nil,why end
- if not number(code,0,65535)then return nil,'Unsupported native key' end
+ if not number(code,57,304)then return nil,'Unsupported native keyboard key' end
+ local input_index=code-49
  if current.at then
-  -- Preserve device flags, trigger, threshold, controller/mouse bytes and parser padding.
-  return put(bytes,current.at+4,math.floor(word(bytes,current.at+4)/65536)*65536+code),current.key
+  -- Native capture stores the keyboard event index in flag bits 20-31 and
+  -- index+49 in the key word. Both must change; gameplay uses the flag index.
+  -- Keep the lower device/input/trigger/layout flags and key parser padding.
+  local flags=word(bytes,current.at)%0x100000+input_index*0x100000
+  local edited=put(bytes,current.at,flags)
+  return put(edited,current.at+4,math.floor(word(bytes,current.at+4)/65536)*65536+code),current.key
  end
  if current.count>=16 then return nil,'Native binding has no free mapping slot' end
  local at=8+current.count*20
- local mapping=packed(67)..packed(code)..packed(0)..packed(0)..packed(0)
+ -- Native plain Press capture observed on the supported build. Its metadata
+ -- must be initialized too; an empty record has no keyboard flags to preserve.
+ local mapping=packed(input_index*0x100000+0xff43)..packed(code)..packed(0)..packed(0)..packed(0x3e4ccccd)
  local next_bytes=bytes:sub(1,at)..mapping..bytes:sub(at+21)
  return put(next_bytes,4,current.count+1),-1
 end
@@ -179,6 +186,24 @@ function N.new(options)
   if not called or ok~=true then return false,tostring(called and why or ok)end
   values=next_values;return true
  end
+ local function override(value)
+  if type(value)~='string'then return end
+  local vk,desired,previous,baseline,expected=value:match('^(%d+) (%d+) (%-?%d+) (%-?%d+) (%-?%d+)$')
+  if not vk then vk,desired,previous,baseline=value:match('^(%d+) (%d+) (%-?%d+) (%-?%d+)$')end
+  if not vk then vk,desired,previous=value:match('^(%d+) (%d+) (%-?%d+)$')end
+  vk,desired,previous,baseline,expected=tonumber(vk),tonumber(desired),tonumber(previous),tonumber(baseline),tonumber(expected)
+  if not number(vk,8,255)or not number(desired,0,65535)or not number(previous,-1,65535)or codec(vk)~=desired or
+   (baseline and not number(baseline,-2147483648,2147483647))or
+   (expected and not number(expected,-2147483648,2147483647))then return end
+  return {vk=vk,desired=desired,previous=previous,baseline=baseline,expected=expected}
+ end
+ local function stored(vk,desired,previous,baseline,expected)
+  return tostring(vk)..' '..tostring(desired)..' '..tostring(previous)..' '..tostring(baseline)..' '..tostring(expected)
+ end
+ local function restore_after_save_failure(token,original,why)
+  local restored,restore_error=backend.write(token,original)
+  return 'Could not save binding: '..tostring(why)..(restored and ''or '; restore pending: '..tostring(restore_error))
+ end
  function self.attach(host)
   if owner==host and backend then return end
   if owner~=host then visits={}end
@@ -197,19 +222,17 @@ function N.new(options)
   local token,error_text=backend.snapshot(record);if not token then return false,error_text end
   local original=token.bytes;local edited,previous=N.replace_keyboard(original,native);if not edited then return false,previous end
   local written,write_error=backend.write(token,edited);if not written then return false,write_error end
-  local key=store_key(record.id);local baseline=N.fingerprint(original)
-  local prior=values[key]
-  if type(prior)=='string'then
-   local _,old_desired,old_previous,old_baseline=prior:match('^(%d+) (%d+) (%-?%d+) (%-?%d+)$')
-   if tonumber(old_desired)==previous and number(tonumber(old_previous),-1,65535)and number(tonumber(old_baseline),-2147483648,2147483647)then
-    previous,baseline=tonumber(old_previous),tonumber(old_baseline)
-   end
+  local key=store_key(record.id);local baseline=N.fingerprint(original);local expected=N.fingerprint(token.bytes)
+  local prior=override(values[key])
+  if prior and prior.expected and prior.desired==previous and prior.expected==baseline then
+   -- Repeated MCM edits share a baseline only while the complete native
+   -- mapping semantics still match the last verified MCM write.
+   previous,baseline=prior.previous,prior.baseline
   end
-  local next_values=clone(values);next_values[key]=tostring(vk)..' '..tostring(native)..' '..tostring(previous)..' '..tostring(baseline)
+  local next_values=clone(values);next_values[key]=stored(vk,native,previous,baseline,expected)
   local saved,save_error=save(next_values)
   if not saved then
-   local restored,restore_error=backend.write(token,original)
-   return false,'Could not save binding: '..tostring(save_error)..(restored and ''or '; restore pending: '..tostring(restore_error))
+   return false,restore_after_save_failure(token,original,save_error)
   end
   local acknowledged,ack_error=backend.acknowledge(token)
   if not acknowledged then return false,'Binding saved; native acknowledgement pending: '..tostring(ack_error)end
@@ -222,24 +245,42 @@ function N.new(options)
    return
   end
   for _,record in ipairs(records or {})do
-   local key=store_key(record.id);local value=values[key]
-   if type(value)=='string'then
-    local vk,desired,previous,baseline=value:match('^(%d+) (%d+) (%-?%d+) (%-?%d+)$')
-    if not vk then vk,desired,previous=value:match('^(%d+) (%d+) (%-?%d+)$')end
-    vk,desired,previous,baseline=tonumber(vk),tonumber(desired),tonumber(previous),tonumber(baseline)
-    local token=vk and backend.snapshot(record);local current=token and keyboard(token.bytes)
-    if current and number(desired,0,65535)and number(previous,-1,65535)and codec(vk)==desired then
-     if current.key~=desired then
-      if visits[record.id] or current.key~=previous or (baseline and N.fingerprint(token.bytes)~=baseline)then
-       -- A later game-native edit is authoritative, including clearing a key.
-       local next_values=clone(values);next_values[key]=nil
-       local ok,why=save(next_values);if not ok and options.log then options.log('Could not retire native override: '..tostring(why))end
-      else
-       local edited=N.replace_keyboard(token.bytes,desired)
-       if edited then local ok=backend.write(token,edited);if ok then backend.acknowledge(token)end end
+   local key=store_key(record.id);local prior=override(values[key])
+   if prior then
+    local token=backend.snapshot(record);local current=token and keyboard(token.bytes)
+    if current then
+     local observed=N.fingerprint(token.bytes)
+     if prior.expected and observed==prior.expected then
+      -- A native-page view without a changed mapping keeps the MCM edit.
+      visits[record.id]=nil
+     elseif prior.baseline and observed==prior.baseline and not visits[record.id]then
+      local original=token.bytes;local edited=N.replace_keyboard(original,prior.desired)
+      if edited then
+       local written=backend.write(token,edited)
+       if written then
+        local expected=N.fingerprint(token.bytes);local saved,why=true,nil
+        if expected~=prior.expected then
+         -- Legacy four-field records migrate only from their exact original
+         -- baseline; the new expected fingerprint comes from native readback.
+         local next_values=clone(values)
+         next_values[key]=stored(prior.vk,prior.desired,prior.previous,prior.baseline,expected)
+         saved,why=save(next_values)
+        end
+        if saved then backend.acknowledge(token);visits[record.id]=nil
+        else
+         local message=restore_after_save_failure(token,original,why)
+         if options.log then options.log(message)end
+        end
+       end
       end
+     else
+      -- Any different native semantics are authoritative, even when the
+      -- keyboard key is unchanged. Three-field records cannot prove a baseline.
+      local next_values=clone(values);next_values[key]=nil
+      local ok,why=save(next_values)
+      if ok then visits[record.id]=nil
+      elseif options.log then options.log('Could not retire native override: '..tostring(why))end
      end
-     visits[record.id]=nil
     end
    end
   end
