@@ -33,7 +33,7 @@ local function close()
     api,menu,input=nil,nil,nil;binding_host=nil;held_toggle=false
 end
 return {
-    name='Mod Configuration Menu (Preview)',version='0.1.59',author='Goose',
+    name='Mod Configuration Menu (Preview)',version='0.1.60',author='Goose',
     description='Shared mod settings. DEL opens MCM; a guarded MCM tab also opens it from the Escape menu.',
     on_enable=function(ctx)
         assert(ctx.api==2 and type(ctx.global)=='function' and type(ctx.on_cleanup)=='function','MDL API 2 required')
@@ -215,7 +215,11 @@ return {
         end
         ctx.global('DBFMCM',api)
         legacy=MCM.legacy.new(api,ctx.log,MCM.core)
-        bindings=MCM.bindings.new(api,ctx.log);binding_timer=0
+        local native_key_code,native_key_name=MCM.native_bindings.keyboard_codec(sr.Keyboard)
+        local native_binding_memory=MCM.native_memory.new(MCM.native_runtime)
+        local native_editor=MCM.native_bindings.new({store=storage,key_code=native_key_code,
+            backend=MCM.native_bindings.windows({ffi=ffi,memory=native_binding_memory,build=MCM.native_entry.build}),log=ctx.log})
+        bindings=MCM.bindings.new(api,ctx.log,{editor=native_editor,key_name=native_key_name});binding_timer=0
         local definition=MCM.framework({example_action=function()ctx.log('MCM example action activated')end},MCM.authoring)
         local actions={}
         actions.reset_window=function()

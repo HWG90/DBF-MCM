@@ -2,7 +2,7 @@
 
 # DBF-MCM
 
-**Divers' Best Friend — Mod Configuration Menu**, preview **0.1.59**, by **Goose**.
+**Divers' Best Friend — Mod Configuration Menu**, preview **0.1.60**, by **Goose**.
 A shared in-game settings menu for Helldivers 2 mods.
 
 [Nexus Mods](https://www.nexusmods.com/helldivers2/mods/17157) | [Ayaka](https://ayakamods.com/mods/dbf-mod-configuration-menu.4846/) | [GitHub downloads](https://github.com/HWG90/DBF-MCM/releases) | [Installation](docs/INSTALL-STANDALONE.md) | [Mod author quick start](docs/AUTHOR-GUIDE.md) | [API](docs/API.md) | [Credits](docs/CREDITS.md)
@@ -25,8 +25,8 @@ Choose one package and run one MCM instance.
 
 | Download | Loader |
 | --- | --- |
-| **`DBF-MCM-Standalone-0.1.59.zip` — main file** | Bingus Shared Loader v15+ / API 1. Import into Arsenal, enable with Shared Loader, deploy and restart. |
-| `ModConfigurationMenu-Preview-0.1.59.zip` — optional file | MDL API 2 **or** LLL R30+. Extract the complete `dbf_mcm` folder into your loader's Mods directory. |
+| **`DBF-MCM-Standalone-0.1.60.zip` — main file** | Bingus Shared Loader v15+ / API 1. Import into Arsenal, enable with Shared Loader, deploy and restart. |
+| `ModConfigurationMenu-Preview-0.1.60.zip` — optional file | MDL API 2 **or** LLL R30+. Extract the complete `dbf_mcm` folder into your loader's Mods directory. |
 
 **MDL and LLL use the same download. LLL does not require MDL.** Keep all packaged Lua files, the manifest, config, `library.txt` and native DLL together. Disable the previous MCM provider before switching. Restart after updating MCM.
 
@@ -42,6 +42,6 @@ HUD+ 0.2.2 integration requires the local owner bridge in [integration setup](do
 
 ## Preview status
 
-Main-font rendering and console behavior are confirmed in LLL. Layout, input, logging and package checks run offline; each loader still needs its own live validation. Controller navigation is not provided. See [release notes](docs/RELEASE-0.1.59.md).
+Main-font rendering and console behavior are confirmed in LLL. Layout, input, logging and package checks run offline; each loader still needs its own live validation. Controller navigation is not provided. See [release notes](docs/RELEASE-0.1.60.md).
 
-Thanks to **Muchacho** for helping troubleshoot native keybinding lookup issues. MBM entries now use compact action/key rows and verified native key names. Custom-key name coverage and reported activation failures remain under investigation; the earlier F13 readout used the wrong key enum.
+Thanks to **Muchacho** for helping troubleshoot native keybinding lookup issues. **MBM keyboard bindings can now be edited directly in MCM:** click a key field, press its replacement, and it saves; Escape cancels. MBM retains native activation, triggers and other-device mappings. MCM persists edits by binding ID, and later native MODS-page changes take priority. Chords and multiple-key mappings still use the native page. The earlier F13 readout used the wrong key enum; direct activation and restart persistence are undergoing live verification.

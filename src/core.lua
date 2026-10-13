@@ -40,7 +40,7 @@ local function normalize(c,v)
 end
 local function stored(c)return c.type=='input' or c.type=='toggle' or c.type=='slider' or c.type=='choice' or c.type=='keybind' or c.type=='color'end
 function M.new(store,log,grouping,options)
-    local api={api=1,version='0.1.59',color_hex=M.color_hex,color_rgb=M.color_rgb,hsv_rgb=M.hsv_rgb,rgb_hsv=M.rgb_hsv,mods={},revision=0};log=log or function()end
+    local api={api=1,version='0.1.60',color_hex=M.color_hex,color_rgb=M.color_rgb,hsv_rgb=M.hsv_rgb,rgb_hsv=M.rgb_hsv,mods={},revision=0};log=log or function()end
     options=options or {};local verbose_override
     local function safe_id(value)return type(value)=='string'and #value<=80 and value:match('^[%w_-]+$')~=nil end
     local function owned_log(owner,message,level)

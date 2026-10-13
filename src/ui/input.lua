@@ -133,6 +133,13 @@ function MODULE.install(context)
 
         state.manual_scroll=false;state.tree_manual=false
 
+        if self.capture and self.capture.native_binding_id then
+            if not self.finish_native_binding_capture(code)then
+                self.capture=false;self.notice='Binding is no longer available'
+            end
+            return
+        end
+
         local mod,page=active();if not mod then if code==27 then self.visible=false end;return end
 
         if self.capture then

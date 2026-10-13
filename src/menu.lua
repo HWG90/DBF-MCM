@@ -105,12 +105,75 @@ function M.new(api,measure)
 
     end
 
+    local function native_available(c)
+        if c.disabled then return false,'Binding is unavailable' end
+        if type(c.native_binding_available)~='function' or type(c.native_binding_bind)~='function' then
+            return false,'Rebind in Options > Mouse & Keyboard > MODS.'
+        end
+        local called,ok,why=pcall(c.native_binding_available)
+        return called and ok==true,called and why or ok
+    end
+    local function native_owner(c)
+        for _,owner in pairs(api.mods)do for _,page in ipairs(owner.pages)do for _,entry in ipairs(page.controls)do
+            if entry.native_binding_id==c.native_binding_id and entry.native_binding_bind==c.native_binding_bind and
+                entry.native_binding_available==c.native_binding_available then return owner,page,entry end
+        end end end
+    end
+    local function native_current(e)
+        if not self.visible or self.suspended or self.focus~='settings' or api.mods[e.owner.id]~=e.owner or
+            api.mods[e.view_id]~=e.view_owner then return false end
+        local found=false
+        for _,page in ipairs(e.owner.pages)do if page==e.page then
+            for _,control in ipairs(page.controls)do if control==e.control then found=true;break end end
+            break
+        end end
+        if not found or e.control.disabled or e.control.native_binding_bind~=e.bind or
+            e.control.native_binding_available~=e.available then return false end
+        local mod,page=active();local rows=selectable(page);local selected=rows[self.row]
+        return mod and mod.id==e.view_id and page.id==e.view_page_id and selected and
+            selected.native_binding_id==e.control.native_binding_id and selected.native_binding_bind==e.bind and
+            selected.native_binding_available==e.available and not selected.disabled
+    end
+    function self.finish_native_binding_capture(code)
+        local e=state.native_capture
+        if not e or not self.capture or not self.capture.native_binding_id then return false end
+        if code==27 then
+            self.capture=false;state.native_capture=nil;self.notice='Binding cancelled';return true
+        end
+        if not native_current(e)then
+            self.capture=false;state.native_capture=nil;self.notice='Binding is no longer available';return true
+        end
+        local available,reason=native_available(e.control)
+        if not available then
+            self.capture=false;state.native_capture=nil;self.notice=tostring(reason or 'Binding is unavailable');return true
+        end
+        if not native_current(e)then
+            self.capture=false;state.native_capture=nil;self.notice='Binding is no longer available';return true
+        end
+        local called,ok,why=pcall(e.bind,code)
+        if called and ok==true then
+            self.capture=false;state.native_capture=nil;self.notice=type(why)=='string'and why or 'Binding saved'
+        else
+            self.notice=tostring(called and why or ok)..'; press another key or Escape to cancel.'
+        end
+        return true
+    end
+
     local function change(c,direction,fine)
 
         if not state.current or c.disabled then return end
 
         if c.native_binding_id then
-            self.notice='Rebind in Options > Mouse & Keyboard > MODS.';return
+            if direction~=0 then self.notice='Click the binding or press Enter to rebind.';return end
+            local available,reason=native_available(c)
+            if not available then self.notice=tostring(reason or 'Binding is unavailable');return end
+            local mod,page=active();local owner,source_page,source_control=native_owner(c)
+            if not mod or not owner or not page or c.page.id~=page.id then self.notice='Binding is no longer available';return end
+            state.native_capture={owner=owner,page=source_page,control=source_control,
+                bind=c.native_binding_bind,available=c.native_binding_available,
+                view_id=mod.id,view_owner=api.mods[mod.id],view_page_id=page.id}
+            if not native_current(state.native_capture)then state.native_capture=nil;self.notice='Binding is no longer available';return end
+            self.capture=c;self.notice='Press a key. Escape cancels.';return
         end
 
         if c.collapsible then

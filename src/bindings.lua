@@ -1,5 +1,5 @@
--- Read-only Mod Bindings Menu discovery. The native provider owns actions,
--- mappings, trigger evaluation and saving; MCM never substitutes a VK binding.
+-- Mod Bindings Menu discovery and optional native keyboard editor. MBM owns
+-- actions and trigger evaluation; the editor persists MCM keyboard overrides.
 local M={}
 local function upvalue(fn,wanted)
     if type(fn)~='function'or not debug or type(debug.getupvalue)~='function'then return end
@@ -76,6 +76,7 @@ local function binding_label(record,options)
     return resolved or native_labels[record.label]or readable_id(record.id)
 end
 local native_description='Mod Bindings Menu owns this binding. Rebind in Options > Mouse & Keyboard > MODS. MCM displays the assigned keys without changing them.'
+local editor_description='Select a binding and press its new key. Escape cancels. MBM evaluates the native action; MCM persists keyboard edits. Later native MODS-page edits take priority.'
 local function readout(mappings,key_name)
     if #mappings==0 then return 'Not bound' end
     local lines,seen={},{}
@@ -101,12 +102,13 @@ function M.new(api,log,options)
         for _,handle in ipairs(handles)do handle.unregister()end
         handles,rows={},{};signature=nil;total=0
     end
-    function self.release()clear();owner,reader=nil,nil;status='host=false' end
+    function self.release()clear();owner,reader=nil,nil;status='host=false';if options.editor then options.editor.release()end end
     function self.diagnostic()return status..' imported='..total end
     function self.poll(host,visible_category)
         if host~=owner then clear();owner=host;reader=nil end
         if not reader and host then local why;reader,why=backend(host);status=reader and 'host=true' or 'host=true '..why end
         if not reader then return end
+        if options.editor then options.editor.poll(host,reader.state.order)end
         local groups,entries,parts={},{},{}
         for _,record in ipairs(reader.state.order)do
             if type(record)~='table'or type(record.id)~='string'or reader.state.registry[record.id]~=record
@@ -130,7 +132,7 @@ function M.new(api,log,options)
             clear()
             for category in pairs(groups)do entries[#entries+1]=category end;table.sort(entries)
             for _,category in ipairs(entries)do
-                local controls={{type='text',label='Rebind in the game\'s MODS controls tab.'}}
+                local controls={{type='text',label=options.editor and 'Select a binding, then press its new key. Escape cancels.'or 'Rebind in the game\'s MODS controls tab.'}}
                 local bindings=groups[category];table.sort(bindings,function(a,b)return a.record.id<b.record.id end)
                 local group_rows={}
                 for index,entry in ipairs(bindings)do
@@ -143,12 +145,30 @@ function M.new(api,log,options)
                 if api.mods[id]then status='host=true registration ID occupied';clear();return end
                 local has_parent=bindings.has_parent
                 local handle=api.register({id=id,name=has_parent and category..' Keybindings'or category,
-                    parent_name=has_parent and category or nil,description=native_description,
+                    parent_name=has_parent and category or nil,description=options.editor and editor_description or native_description,
                     pages={{id='keybindings',name='Keybindings',require_confirmation=false,controls=controls}}})
-                local mod=api.mods[id];mod.pages[1].native_binding_category=category;mod.pages[1].native_binding_description=native_description
+                local mod=api.mods[id];mod.pages[1].native_binding_category=category;mod.pages[1].native_binding_description=options.editor and editor_description or native_description
                 for _,row in ipairs(group_rows)do
                     for _,control in ipairs(mod.pages[1].controls)do if control.id==row.id then row.control=control;break end end
                     row.category=category;rows[#rows+1]=row
+                    if options.editor then
+                        local record,control=row.record,row.control
+                        control.native_binding_available=function()
+                            if host~=owner or reader.state.registry[record.id]~=record then return false,'Binding provider changed'end
+                            return options.editor.available(record)
+                        end
+                        control.native_binding_bind=function(vk)
+                            if host~=owner or reader.state.registry[record.id]~=record then return false,'Binding provider changed'end
+                            local ok,why=options.editor.bind(record,vk)
+                            if ok then
+                                local called,mappings=pcall(reader.snapshot,record)
+                                if called and mappings then control.native_binding_value=readout(mappings,options.key_name or M.key_name);control.native_binding_snapshot=mappings end
+                            end
+                            return ok,why
+                        end
+                        control.description='Select this binding and press a key to save it. MBM still evaluates the native action; MCM saves this keyboard edit. Mouse/controller mappings and activation type are preserved. Later edits in the game\'s MODS page take priority.'
+                    end
+                    row.description=row.control.description
                 end
                 handles[#handles+1]=handle
             end
@@ -160,7 +180,8 @@ function M.new(api,log,options)
             local ok,mappings,why=pcall(reader.snapshot,row.record)
             row.control.native_binding_value=ok and mappings and readout(mappings,options.key_name or M.key_name)or 'Unavailable'
             row.control.native_binding_snapshot=ok and mappings or nil
-            row.control.description=native_description..(ok and mappings and ''or '\n\n'..(ok and why or 'Native binding unavailable'))
+            row.control.description=row.description or native_description
+            if not(ok and mappings)then row.control.description=row.control.description..'\n\n'..(ok and why or 'Native binding unavailable')end
         end end
     end
     return self

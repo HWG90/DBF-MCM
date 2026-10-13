@@ -431,12 +431,14 @@ function MODULE.install(context)
                     end
                     if c.native_binding_id then
                         local bx=x+row_geometry.anchor;local bw=row_geometry.field_width
-                        local value=c.native_binding_value or 'Unavailable'
+                        local capturing=self.capture and self.capture.native_binding_id==c.native_binding_id and
+                            self.capture.native_binding_bind==c.native_binding_bind
+                        local value=capturing and 'Press a key' or c.native_binding_value or 'Unavailable'
                         surface(bx,y-5,bw,29,{field=true,selected=c==selected and self.focus=='settings'})
                         bounded(bx+12,y,value,18,white,math.max(0,bw-24),nil,'body',y-5,29)
                         commands[#commands].native_binding_id=c.native_binding_id
                         hit(x-5,y-7,row_width+5,34,function()
-                            self.row=row_index;self.focus='settings';self.notice='Rebind in Options > Mouse & Keyboard > MODS.'
+                            self.row=row_index;self.focus='settings';change(c,0)
                         end)
                     elseif c.type~='text' and c.type~='section' then
 
@@ -654,7 +656,8 @@ function MODULE.install(context)
                     bounded(hx,help_bottom+54,'Default: '..tostring(default),16,muted,hw,nil,'hint',help_bottom+46,28)
                 end
                 if selected and selected.type=='slider'then bounded(hx,help_bottom+28,'Range: '..selected.min..' - '..selected.max..'    Step: '..selected.step,16,muted,hw,nil,'hint',help_bottom+20,28)end
-                local help_hint=page.native_binding_category and 'Managed by Mod Bindings Menu' or 'Right click for setting options'
+                local native_editable=selected and selected.native_binding_id and type(selected.native_binding_bind)=='function' and type(selected.native_binding_available)=='function'
+                local help_hint=page.native_binding_category and (native_editable and 'Click binding or press Enter to rebind' or 'Managed by Mod Bindings Menu') or 'Right click for setting options'
                 bounded(hx,help_bottom+5,help_hint,14,accent,hw,nil,'hint',help_bottom,24)
                 help_bottom=help_bottom+86;help_height=help_height-86
             else

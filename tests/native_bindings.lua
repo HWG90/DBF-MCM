@@ -168,4 +168,18 @@ test('absent, unsupported and unrelated private registries fail closed',function
     g.state.registry['firstperson.toggle'].code=99;bridge.poll(g.host,true);assert(#api.list()==0)
     f.assert_read_only();g.assert_read_only()
 end)
+test('mounted imported rows capture through the editor and refresh the native readout',function()
+    local f=fixture();f.mapping();local api,old,compat=setup(f);old.release()
+    local writes=0;local editor={poll=function(host,records)assert(host==f.host and #records==1)end,
+        available=function(record)return record==f.state.registry['firstperson.toggle']end,
+        bind=function(record,vk)assert(vk==113 and record==f.state.registry['firstperson.toggle']);writes=writes+1;f.memory[4104][2]=162;return true,'Binding saved'end,
+        release=function()end}
+    local bridge=Bindings.new(api,function()end,{editor=editor,key_name=function(code)return code==162 and 'F2'or 'F1'end})
+    bridge.poll(f.host,'FIRST PERSON')
+    local Menu=dofile('src/menu.lua');local menu=Menu.new(api);menu.visible=true;menu.focus='settings';menu.page=2
+    menu.key(13);assert(menu.capture and menu.capture.native_binding_id=='firstperson.toggle')
+    menu.key(113);assert(writes==1 and not menu.capture and menu.notice=='Binding saved')
+    assert(page(api).controls[2].native_binding_value=='F2'and compat.get('firstperson.enabled')==true)
+    f.assert_read_only();bridge.release()
+end)
 print(count..' native-binding lookup regressions passed; live game readback remains unverified')

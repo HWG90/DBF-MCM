@@ -99,9 +99,11 @@ Select a custom swatch (outlined in yellow), edit its color, then click REPLACE 
 
 When the original menu is absent, MCM provides API 1 register_option/get/set/on_change/ready for toggles, choices and sliders. Its shared registry survives MCM reloads. Legacy registration limits are expanded. Translation functions resolve at registration; full dynamic translation parity is not yet verified. Existing original-menu settings are not automatically migrated. Test each mod live. Restart the game if registrations were already lost before the preservation fix.
 
-Native `ModBindingsMenu` API 1/version 3 registrations also appear on a **Keybindings** page under the matching mod category. MCM reads current native mappings, including First Person's `firstperson.toggle`, without registering actions or changing bindings. Rebind through **Options > Mouse & Keyboard > MODS**; the game retains ownership of keyboard/controller mappings, triggers and persistence. An absent or unsupported native provider is not replaced.
+Native `ModBindingsMenu` API 1/version 3 registrations also appear on a **Keybindings** page under the matching mod category. MCM uses the existing registered action IDs, including First Person's `firstperson.toggle`; it does not register replacement actions or substitute Windows-key polling for MBM activation. An absent or unsupported native provider is not replaced.
 
-MBM action/key rows are selectable read-only displays. Native game key IDs use a separate naming table from Windows virtual keys. Unsupported names remain explicit; they are not guessed from the regular MCM keybind control's VK decoder.
+Select an MBM keyboard field and press a key to save it; Escape cancels. One simple keyboard mapping is editable, with its trigger/threshold and all other devices preserved. Multiple-key or chord bindings remain read-only in MCM and editable through **Options > Mouse & Keyboard > MODS**. Native key IDs are converted separately from MCM's ordinary VK controls.
+
+MCM persists keyboard overrides in `mbm_bindings.ini`, keyed by stable MBM binding ID. It restores an edit only while the original native baseline still matches; later native-page edits retire the override. Writes require a validated game build, current vector/action identity and matching readback, then update MBM's existing sweep fingerprint. Failed persistence rolls the native map back. MCM does not alter the game's input settings file or overwrite controller/mouse bindings.
 # Diagnostics integration
 
 The shared read-only console contract is documented in [DIAGNOSTICS.md](DIAGNOSTICS.md).
