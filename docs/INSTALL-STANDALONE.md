@@ -1,11 +1,11 @@
-# Install MCM 0.1.57
+# Install MCM 0.1.59
 
 Use one MCM instance. Disable the old provider before switching loaders, and restart Helldivers after updating.
 
 ## Bingus Shared Loader — main download
 
 1. Install **Bingus Shared Loader v15+ / API 1**.
-2. Import **DBF-MCM-Standalone-0.1.57.zip** into Arsenal.
+2. Import **DBF-MCM-Standalone-0.1.59.zip** into Arsenal.
 3. Enable MCM alongside Shared Loader, deploy and restart.
 4. Open MCM with **DEL** or the **MCM** Escape-menu tab.
 
@@ -13,7 +13,7 @@ MDL and Bingus Mod Options Menu are not required. The native helper is bundled a
 
 ## LLL or MDL — the same optional download
 
-Download **ModConfigurationMenu-Preview-0.1.57.zip** from [Nexus](https://www.nexusmods.com/helldivers2/mods/17157), [Ayaka](https://ayakamods.com/mods/dbf-mod-configuration-menu.4846/) or [GitHub](https://github.com/HWG90/DBF-MCM/releases).
+Use **ModConfigurationMenu-Preview-0.1.59.zip**. Public downloads are listed on [Nexus](https://www.nexusmods.com/helldivers2/mods/17157), [Ayaka](https://ayakamods.com/mods/dbf-mod-configuration-menu.4846/) and [GitHub](https://github.com/HWG90/DBF-MCM/releases); check the listed version before downloading.
 
 | Loader | Extract `dbf_mcm` into |
 | --- | --- |

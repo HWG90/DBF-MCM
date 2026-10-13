@@ -35,6 +35,8 @@ IDs use letters, numbers, underscore and hyphen, up to 80 bytes. Mod IDs must be
 
 All support `description`, `column=1|2`, and a static `disabled` flag. Stored controls support `validate(value)` (return false to reject) and `on_change(value, control_id, previous)`. Mod-level `on_change` receives the same arguments. Button callbacks are protected and their errors are reported. A keybind control stores the key; the owning mod handles what it does. It currently has no controller or modifier-chord mapping.
 
+Sliders may set `fine_step` to a positive value no greater than `step` for finer Shift + Left/Right adjustments. Set `commit_on_blur=true` to commit a valid numeric draft when focus moves to another control, page or the menu closes. Enter also commits; Escape cancels the draft. Invalid drafts leave the saved value unchanged. Confirmation pages still stage edits until Apply. Sliders without these options retain their normal step and explicit field-commit behavior.
+
 ## Persistence and events
 
 Registration restores persisted values but **does not fire callbacks**. Read `handle.get` immediately and initialize your feature from it. Invalid persisted values fall back to the current definition's default. `set` and `reset` return false plus an error if saving fails; live values remain unchanged and callbacks are not called.
@@ -96,6 +98,10 @@ Select a custom swatch (outlined in yellow), edit its color, then click REPLACE 
 ## ModOptionsMenu compatibility
 
 When the original menu is absent, MCM provides API 1 register_option/get/set/on_change/ready for toggles, choices and sliders. Its shared registry survives MCM reloads. Legacy registration limits are expanded. Translation functions resolve at registration; full dynamic translation parity is not yet verified. Existing original-menu settings are not automatically migrated. Test each mod live. Restart the game if registrations were already lost before the preservation fix.
+
+Native `ModBindingsMenu` API 1/version 3 registrations also appear on a **Keybindings** page under the matching mod category. MCM reads current native mappings, including First Person's `firstperson.toggle`, without registering actions or changing bindings. Rebind through **Options > Mouse & Keyboard > MODS**; the game retains ownership of keyboard/controller mappings, triggers and persistence. An absent or unsupported native provider is not replaced.
+
+MBM action/key rows are selectable read-only displays. Native game key IDs use a separate naming table from Windows virtual keys. Unsupported names remain explicit; they are not guessed from the regular MCM keybind control's VK decoder.
 # Diagnostics integration
 
 The shared read-only console contract is documented in [DIAGNOSTICS.md](DIAGNOSTICS.md).
@@ -124,6 +130,10 @@ menus or unfocused windows. Held movement keys do not prevent capture.
 notch), captured mouse deltas and real-time `dt`, or nil after ownership/focus
 loss. `release()` returns true or false/reason; failed cursor restoration retains
 ownership for retry. `down(vk)` and `focused()` poll physical foreground input.
+`now()` (0.1.58) returns native monotonic seconds independently of simulation
+speed or input-lease ownership. It remains available while the photo menu has
+focus and after capture release. Feature-detect it before use; adapters without
+a native clock do not expose this optional method.
 MCM opening and provider shutdown release this capture. Consumers must release
 on scene loss, error and shutdown, and stop moving when sampling returns nil.
 Native mode 3 captures photo input; `set_focus(true)` switches the owned lease to

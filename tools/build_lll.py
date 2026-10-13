@@ -25,7 +25,7 @@ def package(root,mod_id,title,version,main,modules,extra=None,restart_only=False
 import re
 modules={}
 main=['local MCM={}','mod.scope.MCM=MCM']
-for name in ['core','store','console','commands','preferences','platform','view','capture','camera_input','compat','legacy','authoring','grouping','framework']:
+for name in ['core','store','console','commands','preferences','platform','view','capture','camera_input','compat','legacy','bindings','authoring','grouping','framework']:
     path='src/'+name+'.lua';modules[path]=(ROOT/path).read_bytes();main.append('MCM.'+name+'=mod.require("'+path+'")')
 for name in ['theme','text','font','layout','branding','input','render']:
     path='src/ui/'+name+'.lua';modules[path]=(ROOT/path).read_bytes();main.append('MCM.ui_'+name+'=mod.require("'+path+'")')

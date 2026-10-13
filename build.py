@@ -8,7 +8,7 @@ VERSION=(ROOT/'VERSION').read_text().strip()
 parser=argparse.ArgumentParser();parser.add_argument('--install',action='store_true');args=parser.parse_args()
 if args.install:parser.error('Python installation is disabled. Build with build.ps1, then use the native PowerShell deploy.ps1 entrypoint.')
 parts=['local MCM={}\n']
-for name in ['core','store','console','commands','preferences','platform','view','capture','camera_input','compat','legacy','authoring','grouping','framework']:
+for name in ['core','store','console','commands','preferences','platform','view','capture','camera_input','compat','legacy','bindings','authoring','grouping','framework']:
     parts.append(f'MCM.{name}=(function()\n'+(ROOT/'src'/f'{name}.lua').read_text(encoding='utf-8')+'\nend)()\n')
 for name in ['theme','text','font','layout','branding','input','render']:
     parts.append(f'MCM.ui_{name}=(function()\n'+(ROOT/'src/ui'/f'{name}.lua').read_text(encoding='utf-8')+'\nend)()\n')

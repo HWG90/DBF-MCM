@@ -9,7 +9,7 @@ function MODULE.install(context)
     function self.compose(w,h)
 
         if type(w)~='number'or type(h)~='number'or not(w>0 and h>0 and w<math.huge and h<math.huge)then return {}end
-        if not self.visible then self.release_console();state.hits={};state.drag=nil;state.window_drag=nil;state.window_resize=nil;self.dropdown=nil;self.context_menu=nil;state.scroll_drag=nil;self.text_edit=nil;self.color_picker=nil;self.pointer_x,self.pointer_y=nil,nil;return {}end
+        if not self.visible then if self.finish_text_field then self.finish_text_field(true)end;self.release_console();state.hits={};state.drag=nil;state.window_drag=nil;state.window_resize=nil;self.dropdown=nil;self.context_menu=nil;state.scroll_drag=nil;self.text_edit=nil;self.color_picker=nil;self.pointer_x,self.pointer_y=nil,nil;return {}end
 
         local commands={};state.hits={};state.choice_bounds={}
         local s=math.min(math.min(w/1920,h/1080)*math.max(.75,math.min(1.5,self.ui_scale or 1)),w/1100,h/600)
@@ -332,9 +332,9 @@ function MODULE.install(context)
             end
             local display={};local selected_at=1;local ordinal=0
             for _,control in ipairs(visible_controls(page))do
-                if control.collapsible or (control.type~='text' and control.type~='section')then ordinal=ordinal+1 end
+                if control.native_binding_id or control.collapsible or (control.type~='text' and control.type~='section')then ordinal=ordinal+1 end
                 if control==selected then selected_at=#display+1 end
-                if control.type=='text' and control.text_role~='title' and control.text_role~='selection'then
+                if not control.native_binding_id and control.type=='text' and control.text_role~='title' and control.text_role~='selection'then
                     for _,line in ipairs(M.rich(control.label,row_width*s,20*s*font_scale,measure))do
                         local parts={};for _,span in ipairs(line.spans)do parts[#parts+1]=span.text end
                         display[#display+1]={control=control,label=table.concat(parts),body=true,row=ordinal}
@@ -378,7 +378,7 @@ function MODULE.install(context)
 
                     local color=c.disabled and T.disabled or accent
 
-                    local informational=c.type=='text' or c.type=='section'
+                    local informational=not c.native_binding_id and (c.type=='text' or c.type=='section')
 
                     local label=string.rep('  ',c.depth or 0)..(c.collapsible and (section_open(page,c) and 'v ' or '> ') or '')..entry.label
 
@@ -429,7 +429,16 @@ function MODULE.install(context)
                         hit(x-5,y-7,row_width+5,34,function()self.row=row_index;self.focus='settings';change(header,0)end)
                         right_target({kind='control',mod=mod,page=page,control=c,row=row_index})
                     end
-                    if c.type~='text' and c.type~='section' then
+                    if c.native_binding_id then
+                        local bx=x+row_geometry.anchor;local bw=row_geometry.field_width
+                        local value=c.native_binding_value or 'Unavailable'
+                        surface(bx,y-5,bw,29,{field=true,selected=c==selected and self.focus=='settings'})
+                        bounded(bx+12,y,value,18,white,math.max(0,bw-24),nil,'body',y-5,29)
+                        commands[#commands].native_binding_id=c.native_binding_id
+                        hit(x-5,y-7,row_width+5,34,function()
+                            self.row=row_index;self.focus='settings';self.notice='Rebind in Options > Mouse & Keyboard > MODS.'
+                        end)
+                    elseif c.type~='text' and c.type~='section' then
 
                         local value=(mod.handle.preview or mod.handle.get)(c.id);local control=c;local owner=mod
 
@@ -480,7 +489,7 @@ function MODULE.install(context)
                                 self.notice='Type value; Enter saves, Escape cancels'
 
                             end)
-
+                            state.hits[#state.hits].edit_control=control;state.hits[#state.hits].edit_mod=owner
                             hit(track-8,y-7,width+16,34,function(mx)
 
                                 if control.disabled then return end;select()
@@ -621,7 +630,7 @@ function MODULE.install(context)
 
             end
 
-            local help=selected and selected.description or mod.description
+            local help=selected and selected.description or page.native_binding_description or mod.description
 
             local key=mod.id..'/'..page.id..'/'..tostring(help)
 
@@ -645,7 +654,8 @@ function MODULE.install(context)
                     bounded(hx,help_bottom+54,'Default: '..tostring(default),16,muted,hw,nil,'hint',help_bottom+46,28)
                 end
                 if selected and selected.type=='slider'then bounded(hx,help_bottom+28,'Range: '..selected.min..' - '..selected.max..'    Step: '..selected.step,16,muted,hw,nil,'hint',help_bottom+20,28)end
-                bounded(hx,help_bottom+5,'Right click for setting options',14,accent,hw,nil,'hint',help_bottom,24)
+                local help_hint=page.native_binding_category and 'Managed by Mod Bindings Menu' or 'Right click for setting options'
+                bounded(hx,help_bottom+5,help_hint,14,accent,hw,nil,'hint',help_bottom,24)
                 help_bottom=help_bottom+86;help_height=help_height-86
             else
                 rect(hx-15,help_bottom,hw+30,help_height+4,T.panel)

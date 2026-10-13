@@ -1,7 +1,7 @@
 local camera_input
 local api,menu,view,registered,input,log,capture;local legacy;local hud_integration,hud_runtime,native_entry;local hud_timer=0;local hud_diagnostic;local diagnostic;local binding_host;local held_toggle=false;local retired=false
 local diagnostics,diagnostics_owner,log_context,original_log,mirror_log
-local log_follower,font_status
+local font_status;local bindings;local binding_timer=0
 local function close()
     -- A failed external restore must keep its provider and snapshot available.
     if camera_input then local ok,why=camera_input.release();if ok==false then return false,why end;camera_input=nil end
@@ -17,6 +17,7 @@ local function close()
     end
     if hud_integration then hud_integration.release();hud_integration=nil end
     if hud_runtime then hud_runtime.release();hud_runtime=nil end
+    if bindings then bindings.release();bindings=nil end
     if legacy then
         -- Capture the active provider before MDL unwinds its registered globals.
         legacy.poll(rawget(_G,'ModOptionsMenu'))
@@ -27,13 +28,12 @@ local function close()
     if api and rawget(_G,'DBFMCM')==api then rawset(_G,'DBFMCM',nil)end
     if menu and menu.release_console then menu.release_console()end
     if diagnostics_owner then diagnostics.detach(diagnostics_owner);diagnostics_owner=nil end
-    if log_follower then log_follower.release();log_follower=nil end
     if log_context and log_context.log==mirror_log then log_context.log=original_log end
     log_context,original_log,mirror_log=nil,nil,nil
     api,menu,input=nil,nil,nil;binding_host=nil;held_toggle=false
 end
 return {
-    name='Mod Configuration Menu (Preview)',version='0.1.57',author='Goose',
+    name='Mod Configuration Menu (Preview)',version='0.1.59',author='Goose',
     description='Shared mod settings. DEL opens MCM; a guarded MCM tab also opens it from the Escape menu.',
     on_enable=function(ctx)
         assert(ctx.api==2 and type(ctx.global)=='function' and type(ctx.on_cleanup)=='function','MDL API 2 required')
@@ -113,23 +113,6 @@ return {
         font_status=nil
         menu.text_metrics=view.text_metrics
         menu.set_command_bus(MCM.commands.for_host(api,loader,diagnostics,{get_verbose=api.get_verbose,set_verbose=function(value)return MCM.preferences.set_verbose(api,value,runtime_writer)end}))
-        local local_data=assert(os.getenv('LOCALAPPDATA'))
-        local log_roots={loader and loader.log_directory or ctx.dir,local_data..'/CowboyBingus/Helldivers2/Logs',local_data..'/MDL/Helldivers2/Logs'}
-        local log_cache={};local log_host=MCM.console.host_logs(diagnostics)
-        local function foreign_logs()
-            local current=rawget(_G,'LiveLuaLoader')
-            local found,source_keys=MCM.console.discover_logs(current and current.live_catalog or {},log_roots,{cache=log_cache})
-            for source,location in pairs(diagnostics.locations or {})do
-                local normalized=type(location)=='string'and location:gsub('\\','/'):lower()
-                if normalized and not normalized:find('..',1,true)and not normalized:match('/mcm[^/]*%.log$')and not normalized:match('/livelualoader%.log$')then
-                    for _,root in ipairs(log_roots)do local prefix=root:gsub('\\','/'):lower()..'/'
-                        if normalized:sub(1,#prefix)==prefix then found[source]=location;source_keys[source]=source;break end
-                    end
-                end
-            end
-            return log_host.filter(found,source_keys,current)
-        end
-        log_follower=MCM.console.follow_logs(diagnostics,{paths=foreign_logs,read_existing=false})
         local font_ok,font_error=pcall(function()
             local font_memory=MCM.native_memory.new(MCM.native_runtime)
             view.set_font_source(MCM.ui_font.new(font_memory,'game.dll',function(address)return ffi.cast('void *',address)end))
@@ -232,6 +215,7 @@ return {
         end
         ctx.global('DBFMCM',api)
         legacy=MCM.legacy.new(api,ctx.log,MCM.core)
+        bindings=MCM.bindings.new(api,ctx.log);binding_timer=0
         local definition=MCM.framework({example_action=function()ctx.log('MCM example action activated')end},MCM.authoring)
         local actions={}
         actions.reset_window=function()
@@ -310,7 +294,6 @@ return {
     on_update=function(ctx,dt)
         if retired or not api then return end
         local ok,err=pcall(function()
-            if log_follower then log_follower.tick(dt)end
             input.poll()
             -- Loaders can cache their update entry; lifecycle polling still
             -- runs even when a newly installed global wrapper is not called.
@@ -323,8 +306,15 @@ return {
                 if hud_runtime and hud_integration then local report=hud_runtime.diagnostic()..'; '..hud_integration.diagnostic();if report~=hud_diagnostic then hud_diagnostic=report;ctx.log('HUD+ integration: '..report)end end
             end
             legacy.poll(rawget(_G,'ModOptionsMenu'))
+            binding_timer=binding_timer+math.max(0,tonumber(dt)or 0)
+            if binding_timer>=.25 then
+                binding_timer=0
+                local selected_mod=menu.visible and api.list()[menu.selected]
+                local selected_page=selected_mod and selected_mod.pages[menu.page]
+                bindings.poll(rawget(_G,'ModBindingsMenu'),selected_page and selected_page.native_binding_category)
+            end
             api.mount('dbf_ass_blacklist',"Diver's Best Friend")
-            local report=legacy.diagnostic()
+            local report=legacy.diagnostic()..'; Native bindings: '..bindings.diagnostic()
             if report~=diagnostic then
                 diagnostic=report;ctx.log('Legacy registry: '..report)
                 local f=io.open(os.getenv('LOCALAPPDATA')..'/MDL/Helldivers2/Logs/MCM-diagnostic.log','w')

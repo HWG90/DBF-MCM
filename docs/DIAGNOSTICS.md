@@ -96,21 +96,7 @@ fallback launch config. The same explicit command uses that owning writer.
 reads it. Verbose registration logs page/category/control counts. Existing UI
 settings remain independent and are not reset.
 
-## Following other mod logs
+## Direct diagnostics only
 
-Newer LLL builds may already discover/poll mod logs and publish their errors to
-the shared model. `Console.discover_logs(catalog, roots, options)` can discover
-literal `.log` names from known entry files, manifest-declared Lua modules and
-`metadata.log_files`. It never executes sources or walks arbitrary directories.
-Default cached discovery limits are 64 source files, 32 KiB per file, 256 KiB total
-and 128 log paths.
-
-`Console.follow_logs(model, {paths=source_to_path_map_or_function,...})` returns
-`tick(dt)` and `release()`. New paths start at EOF. Each poll reads at most 16 KiB
-across eight sources, rotating through the bounded map. Appends, partial lines and
-truncation are handled; matching error/failure/exception lines retain their source
-and actual log path. Skip central/owned files already emitted directly, including
-the loader log and MCM-created logs, to avoid duplicates.
-
-Only reported errors and known readable files are observable. MCM cannot intercept
-foreign native crashes, undisclosed log locations or errors that a mod never logs.
+MCM does not discover, register, open or poll other mods log files.
+Mods report errors directly through the diagnostics API; owned event logging remains available.

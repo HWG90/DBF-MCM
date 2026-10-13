@@ -8,7 +8,7 @@ function L.rows(available,controls,measure,size,scale)
     local width=math.min(available,L.max_row_width)
     local label=200
     for _,c in ipairs(controls or {})do
-        if c.type~='text'and c.type~='section'and c.label then
+        if (c.native_binding_id or c.type~='text'and c.type~='section')and c.label then
             local value=string.rep('  ',c.depth or 0)..tostring(c.label)
             local ok,measured=pcall(measure,value,size*scale)
             if ok and type(measured)=='number'and measured==measured and measured<math.huge then label=math.max(label,measured/scale)end

@@ -29,3 +29,12 @@ assert(camera.acquire());assert(camera.set_focus(true));assert(mode==1)
 local pointer=camera.menu_sample();assert(pointer.x==125 and pointer.y==250)
 assert(camera.set_focus(false));assert(mode==3 and camera.sample());assert(camera.release())
 print('Photo input focus: menu/camera capture modes, pointer sampling and restoration passed')
+
+local seconds=12
+input.now=function()return seconds end
+local timed=factory.new(native,capture,input,function()return allowed end)
+assert(timed.now()==12 and mode==0,'Photo effects must be able to read time without a camera input lease')
+assert(timed.acquire());assert(timed.set_focus(true));seconds=12.08
+assert(timed.now()==12.08 and timed.menu_sample().dt>0,'Menu focus must retain the real-time effect clock')
+assert(timed.release());seconds=13;assert(timed.now()==13)
+print('Photo effect clock: lease-free monotonic timer, menu focus and release passed')

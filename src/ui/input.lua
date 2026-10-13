@@ -3,6 +3,22 @@ local MODULE={}
 function MODULE.install(context)
     local self,api,console,state=context.self,context.api,context.console,context.state
     local active,selectable,change,saved_notice=context.helpers.active,context.helpers.selectable,context.helpers.change,context.helpers.saved_notice
+    function self.finish_text_field(blur)
+        local e=self.text_edit
+        if not e or e.color_channel then return true end
+        local c=e.control
+        if blur and (not c or c.type~='slider'or c.commit_on_blur~=true)then return true end
+        if not c or not e.mod or api.mods[e.mod.id]~=e.mod or e.mod.controls[c.id]~=c or c.disabled then
+            self.text_edit=nil;self.notice='Setting is no longer available';return true
+        end
+        local value=c.type=='input'and e.text or tonumber(e.text)
+        if c.type~='input'and(not value or value~=value or math.abs(value)==math.huge or value<c.min or value>c.max)then
+            self.notice='Enter a number from '..c.min..' to '..c.max;return false
+        end
+        local called,ok,err=pcall(e.mod.handle.edit or e.mod.handle.set,c.id,value)
+        if not called or not ok then self.notice=tostring(called and err or ok);return false end
+        self.notice=saved_notice(c,e.mod.handle);self.text_edit=nil;return true
+    end
     function self.key(code,ctrl,shift)
 
         local toggle=code==(api.menu_toggle_key or 46) and not self.capture and not self.text_edit and not self.color_picker
@@ -31,26 +47,17 @@ function MODULE.install(context)
 
             if code==9 and e.color_channel then self.finish_color_field();return end
 
-            if code==13 or code==9 then
+            if (code==33 or code==34)and e.control and e.control.commit_on_blur==true then
+                if not self.finish_text_field(true)then return end
+            elseif code==13 or code==9 then
 
                 if e.color_channel then self.finish_color_field();return end
 
-                local value=e.control.type=='input' and e.text or tonumber(e.text)
-
-                if e.control.type~='input' and (not value or value~=value or value<e.control.min or value>e.control.max) then
-
-                    self.notice='Enter a number from '..e.control.min..' to '..e.control.max;return
-
-                end
-
-                local called,ok,err=pcall(e.mod.handle.edit or e.mod.handle.set,e.control.id,value)
-
-                if not called or not ok then self.notice=tostring(called and err or ok);return end
-
-                self.notice=saved_notice(e.control,e.mod.handle);self.text_edit=nil;return
+                self.finish_text_field(false);return
 
             end
 
+            if self.text_edit then
             if ctrl and code==65 then e.replace=true;return end
 
             if code==8 then if e.replace then e.text=''else e.text=e.text:sub(1,-2)end;e.replace=false;return end
@@ -78,9 +85,8 @@ function MODULE.install(context)
                 if #e.text<(e.control and e.control.type=='input' and 48 or 24) then e.text=e.text..char end
 
             end
-
             return
-
+            end
         end
 
         if self.color_picker then
@@ -170,7 +176,7 @@ function MODULE.install(context)
 
             if code==38 or code==40 then self.row=math.max(1,math.min(#rows,self.row+(code==38 and -1 or 1)))
 
-            elseif c and (code==37 or code==39 or code==13) then change(c,code==13 and 0 or (code==37 and -1 or 1))end
+            elseif c and (code==37 or code==39 or code==13) then change(c,code==13 and 0 or (code==37 and -1 or 1),shift)end
 
         end
 
@@ -261,7 +267,11 @@ function MODULE.install(context)
             end
             if x and y and input.down(1) and not self.mouse_held then
 
+                local target
+                for i=#state.hits,1,-1 do local h=state.hits[i];if x>=h.x and x<=h.x+h.w and y>=h.y and y<=h.y+h.h then target=h;break end end
+                local same=self.text_edit and self.text_edit.control and self.text_edit.control.commit_on_blur==true and target and target.edit_control==self.text_edit.control and target.edit_mod==self.text_edit.mod
                 local valid=self.finish_color_field()
+                if valid and self.text_edit and not same then valid=self.finish_text_field(true)end
 
                 if self.text_edit and self.text_edit.control and self.text_edit.control.type=='input' then
 
@@ -271,9 +281,9 @@ function MODULE.install(context)
 
                 end
 
-                if valid then self.text_edit=nil end
+                if valid and not same then self.text_edit=nil end
 
-                for i=#state.hits,1,-1 do local h=state.hits[i];if x>=h.x and x<=h.x+h.w and y>=h.y and y<=h.y+h.h then if valid then h.click(x,y)end;break end end
+                if valid and target and not same then target.click(x,y)end
 
             end
 

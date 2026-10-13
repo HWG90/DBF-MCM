@@ -64,6 +64,9 @@ function M.new(native,capture,input,available)
     end
     function self.down(key) input.poll();return input.down(key) end
     function self.focused() input.poll();return input.focused() end
+    -- This clock belongs to native input, independently of simulation speed or
+    -- whether movement sampling is suspended while a photo menu has focus.
+    if type(input.now)=='function' then function self.now()return input.now()end end
     function self.pause_allowed()
         return input.photo_check~=nil and native.mcm_photo_pause_allowed(input.photo_check)~=0
     end

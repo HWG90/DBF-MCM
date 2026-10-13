@@ -41,6 +41,7 @@ function M.new(api,measure)
     self.sidebar_width=330;self.help_scroll=0
 
     function self.open_settings()
+        if self.text_edit and self.finish_text_field and not self.finish_text_field(true)then return false,self.notice end
         if self.capture or self.text_edit or self.color_picker then return false,'Finish the active editor first'end
         local mods=api.list();local mod=mods[self.selected];local page=mod and mod.pages[self.page]
         local target_mod,target_page=api.settings_mod_id,api.settings_page_id or 'mcm_settings'
@@ -98,15 +99,19 @@ function M.new(api,measure)
 
         local rows={};for _,c in ipairs(visible_controls(page))do
 
-            if c.collapsible or (c.type~='text' and c.type~='section') then rows[#rows+1]=c end
+            if c.native_binding_id or c.collapsible or (c.type~='text' and c.type~='section') then rows[#rows+1]=c end
 
         end;return rows
 
     end
 
-    local function change(c,direction)
+    local function change(c,direction,fine)
 
         if not state.current or c.disabled then return end
+
+        if c.native_binding_id then
+            self.notice='Rebind in Options > Mouse & Keyboard > MODS.';return
+        end
 
         if c.collapsible then
             local key=state_key(c.page,c.id);local open=section_open(c.page,c)
@@ -138,7 +143,7 @@ function M.new(api,measure)
 
             elseif c.type=='choice' then v=(v-1+(direction==0 and 1 or direction))%#c.choices+1
 
-            elseif c.type=='slider' then v=math.max(c.min,math.min(c.max,v+(direction==0 and 1 or direction)*c.step))
+            elseif c.type=='slider' then v=math.max(c.min,math.min(c.max,v+(direction==0 and 1 or direction)*(fine and c.fine_step or c.step)))
 
             else return end
 
@@ -217,6 +222,7 @@ function M.new(api,measure)
         return control
     end
     function self.select_target(target)
+        if self.text_edit and self.finish_text_field and not self.finish_text_field(true)then return false,self.notice end
         local wanted=target.mod and target.mod.id
         for index,mod in ipairs(api.list())do if mod.id==wanted then
             local page_index=1
