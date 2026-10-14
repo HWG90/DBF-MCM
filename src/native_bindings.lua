@@ -179,7 +179,7 @@ local function store_key(id)return 'b_'..id:gsub('.',function(c)return string.fo
 local function clone(t)local r={};for k,v in pairs(t)do r[k]=v end;return r end
 function N.new(options)
  local store=assert(options.store);local codec=assert(options.key_code);local make_backend=assert(options.backend)
- local values=store.load('mbm_bindings')or {};local owner,backend,reason;local visits={}
+ local values=store.load('mbm_bindings')or {};local owner,backend,reason;local visits,established={},{}
  local self={}
  local function save(next_values)
   local called,ok,why=pcall(store.save,'mbm_bindings',next_values)
@@ -206,7 +206,7 @@ function N.new(options)
  end
  function self.attach(host)
   if owner==host and backend then return end
-  if owner~=host then visits={}end
+  if owner~=host then visits,established={},{}end
   owner=host;backend=nil
   local called,b,why=pcall(make_backend,host)
   backend=called and b or nil;reason=called and why or b
@@ -236,6 +236,7 @@ function N.new(options)
   end
   local acknowledged,ack_error=backend.acknowledge(token)
   if not acknowledged then return false,'Binding saved; native acknowledgement pending: '..tostring(ack_error)end
+  established[record.id]=true
   return true,'Binding saved'
  end
  function self.poll(host,records)
@@ -252,7 +253,7 @@ function N.new(options)
      local observed=N.fingerprint(token.bytes)
      if prior.expected and observed==prior.expected then
       -- A native-page view without a changed mapping keeps the MCM edit.
-      visits[record.id]=nil
+      visits[record.id]=nil;established[record.id]=true
      elseif prior.baseline and observed==prior.baseline and not visits[record.id]then
       local original=token.bytes;local edited=N.replace_keyboard(original,prior.desired)
       if edited then
@@ -266,21 +267,27 @@ function N.new(options)
          next_values[key]=stored(prior.vk,prior.desired,prior.previous,prior.baseline,expected)
          saved,why=save(next_values)
         end
-        if saved then backend.acknowledge(token);visits[record.id]=nil
+        if saved then
+         local acknowledged=backend.acknowledge(token)
+         if acknowledged then visits[record.id]=nil;established[record.id]=true end
         else
          local message=restore_after_save_failure(token,original,why)
          if options.log then options.log(message)end
         end
        end
       end
-     else
+     elseif visits[record.id]or established[record.id]or not prior.baseline then
       -- Any different native semantics are authoritative, even when the
-      -- keyboard key is unchanged. Three-field records cannot prove a baseline.
+      -- keyboard key is unchanged, after this session's mapping is established
+      -- or a native-page visit. Three-field records cannot prove a baseline.
       local next_values=clone(values);next_values[key]=nil
       local ok,why=save(next_values)
       if ok then visits[record.id]=nil
       elseif options.log then options.log('Could not retire native override: '..tostring(why))end
      end
+     -- Initial action availability can precede the saved input profile. An
+     -- unmatched bootstrap map must neither overwrite native input nor erase
+     -- the journal. Wait for its exact baseline/expected map or a native edit.
     end
    end
   end

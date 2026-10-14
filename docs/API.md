@@ -103,7 +103,7 @@ Native `ModBindingsMenu` API 1/version 3 registrations also appear on a **Keybin
 
 Select an MBM keyboard field and press a key to save it; Escape cancels. One simple keyboard mapping is editable, with its trigger/threshold and all other devices preserved. Multiple-key or chord bindings remain read-only in MCM and editable through **Options > Mouse & Keyboard > MODS**. Native key IDs are converted separately from MCM's ordinary VK controls.
 
-MCM persists keyboard overrides in `mbm_bindings.ini`, keyed by stable MBM binding ID. It restores an edit only while the original native baseline still matches; later native-page edits retire the override. Writes require a validated game build, current vector/action identity and matching readback, then update MBM's existing sweep fingerprint. Failed persistence rolls the native map back. MCM does not alter the game's input settings file or overwrite controller/mouse bindings.
+MCM persists keyboard overrides in `mbm_bindings.ini`, keyed by stable MBM binding ID. It restores an edit only while the original native baseline still matches; temporary startup mappings are left untouched while the saved input profile loads. Later native-page edits retire the override. Writes require a validated game build, current vector/action identity and matching readback, then update MBM's existing sweep fingerprint. Failed persistence rolls the native map back. MCM does not alter the game's input settings file or overwrite controller/mouse bindings.
 # Diagnostics integration
 
 The shared read-only console contract is documented in [DIAGNOSTICS.md](DIAGNOSTICS.md).
