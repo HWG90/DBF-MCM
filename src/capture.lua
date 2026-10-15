@@ -33,6 +33,9 @@ function M.new(native,window,log)
         if self.active or snapshot or external then return nil,'Input lease already owned'end
         local ok,saved=pcall(function()return {focus=window.mouse_focus(),cursor=window.show_cursor(),clip=window.clip_cursor()}end)
         if not ok then return nil,tostring(saved)end
+        -- Different frontend DLLs have separate native gates. Never retain an
+        -- editor's disabled mouse focus as the external camera's game baseline.
+        if saved.focus~=true then return nil,'Game mouse focus is already disabled; close the other input owner or recover focus first'end
         local token={};external={owner=owner,token=token,snapshot=saved};return token
     end
     function self.owns(token)return external~=nil and external.token==token end
