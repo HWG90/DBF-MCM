@@ -60,6 +60,12 @@ local function keyboard(bytes)
 end
 function N.replace_keyboard(bytes,code)
  local current,why=keyboard(bytes);if not current then return nil,why end
+ if code==0 then
+  if not current.at then return bytes,-1 end
+  local last=8+current.count*20
+  local edited=bytes:sub(1,current.at)..bytes:sub(current.at+21,last)..string.rep('\0',20)..bytes:sub(last+1)
+  return put(edited,4,current.count-1),current.key
+ end
  if not number(code,57,304)then return nil,'Unsupported native keyboard key' end
  local input_index=code-49
  if current.at then
@@ -192,7 +198,7 @@ function N.new(options)
   if not vk then vk,desired,previous,baseline=value:match('^(%d+) (%d+) (%-?%d+) (%-?%d+)$')end
   if not vk then vk,desired,previous=value:match('^(%d+) (%d+) (%-?%d+)$')end
   vk,desired,previous,baseline,expected=tonumber(vk),tonumber(desired),tonumber(previous),tonumber(baseline),tonumber(expected)
-  if not number(vk,8,255)or not number(desired,0,65535)or not number(previous,-1,65535)or codec(vk)~=desired or
+  if not (vk==0 and desired==0 or number(vk,8,255)and codec(vk)==desired)or not number(desired,0,65535)or not number(previous,-1,65535)or
    (baseline and not number(baseline,-2147483648,2147483647))or
    (expected and not number(expected,-2147483648,2147483647))then return end
   return {vk=vk,desired=desired,previous=previous,baseline=baseline,expected=expected}
@@ -218,16 +224,18 @@ function N.new(options)
  end
  function self.bind(record,vk)
   local available,why=self.available(record);if not available then return false,why end
-  local native,codec_error=codec(vk);if not number(native,0,65535)then return false,codec_error or 'This keyboard key is not supported'end
+  local native,codec_error
+  if vk==0 then native=0 else native,codec_error=codec(vk)end
+  if not number(native,0,65535)then return false,codec_error or 'This keyboard key is not supported'end
   local token,error_text=backend.snapshot(record);if not token then return false,error_text end
   local original=token.bytes;local edited,previous=N.replace_keyboard(original,native);if not edited then return false,previous end
   local written,write_error=backend.write(token,edited);if not written then return false,write_error end
   local key=store_key(record.id);local baseline=N.fingerprint(original);local expected=N.fingerprint(token.bytes)
   local prior=override(values[key])
-  if prior and prior.expected and prior.desired==previous and prior.expected==baseline then
+  if prior and prior.expected and (prior.desired==previous or prior.desired==0 and previous==-1)and prior.expected==baseline then
    -- Repeated MCM edits share a baseline only while the complete native
    -- mapping semantics still match the last verified MCM write.
-   previous,baseline=prior.previous,prior.baseline
+   previous,baseline=prior.desired==0 and -1 or prior.previous,prior.baseline
   end
   local next_values=clone(values);next_values[key]=stored(vk,native,previous,baseline,expected)
   local saved,save_error=save(next_values)
@@ -237,7 +245,7 @@ function N.new(options)
   local acknowledged,ack_error=backend.acknowledge(token)
   if not acknowledged then return false,'Binding saved; native acknowledgement pending: '..tostring(ack_error)end
   established[record.id]=true
-  return true,'Binding saved'
+  return true,vk==0 and 'Keyboard binding cleared'or 'Binding saved'
  end
  function self.poll(host,records)
   self.attach(host);if not backend then return end
@@ -255,7 +263,11 @@ function N.new(options)
       -- A native-page view without a changed mapping keeps the MCM edit.
       visits[record.id]=nil;established[record.id]=true
      elseif prior.baseline and observed==prior.baseline and not visits[record.id]then
-      local original=token.bytes;local edited=N.replace_keyboard(original,prior.desired)
+      local original=token.bytes;local source=original
+      -- A rebind after an explicit clear appends a fresh native Press mapping.
+      -- Reproduce that order/template from the original startup baseline.
+      if prior.previous==-1 and prior.desired~=0 then source=N.replace_keyboard(source,0)end
+      local edited=source and N.replace_keyboard(source,prior.desired)
       if edited then
        local written=backend.write(token,edited)
        if written then

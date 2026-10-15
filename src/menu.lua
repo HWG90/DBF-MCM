@@ -319,6 +319,22 @@ function M.new(api,measure)
         if target.kind=='control'and mod and control then
             local original=authoritative(control)
             local editable=original and not original.disabled and not control.disabled
+            if control.type=='keybind'or control.native_binding_id then
+                add('Unbind key',not control.disabled and (control.native_binding_id and native_available(control)or editable),function()
+                    local ok,why=self.select_target(target);if not ok then return false,why end
+                    if control.native_binding_id then
+                        change(control,0)
+                        if not self.capture then return false,self.notice end
+                        self.finish_native_binding_capture(0)
+                        return not self.capture,self.notice
+                    end
+                    local current=authoritative(control)
+                    if not current or current.disabled or control.disabled then return false,'Setting unavailable'end
+                    local called,saved,reason=pcall(mod.handle.edit or mod.handle.set,control.id,0)
+                    self.notice=called and saved and ('Key unbound; '..saved_notice(control,mod.handle))or tostring(called and reason or saved)
+                    return called and saved,self.notice
+                end)
+            end
             if control.collapsible then add(section_open(page or control.page,control)and 'Collapse section'or 'Expand section',true,function()
                 local ok,why=self.select_target(target);if not ok then return false,why end
                 change(control,0);return true

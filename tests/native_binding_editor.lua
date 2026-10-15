@@ -37,6 +37,27 @@ local function field(menu,value)
     end
     error('Missing native binding field '..tostring(value))
 end
+test('ordinary keybind unbind stages and applies zero with a readable label',function()
+    local saved={}
+    local api=Core.new({load=function()return {}end,save=function(_,v)saved=v;return true end})
+    local h=api.register({id='ordinary',name='Ordinary',pages={{id='settings',name='Settings',require_confirmation=true,controls={{id='key',type='keybind',label='Shortcut',default=112}}}}})
+    local mod=api.mods.ordinary;local page=mod.pages[1];local menu=Menu.new(api);menu.visible=true;menu.compose(1920,1080)
+    menu.open_context({kind='control',mod=mod,page=page,control=page.controls[1]},100,100)
+    local found
+    for i,item in ipairs(menu.context_menu.items)do if item.label=='Unbind key'then found=i end end
+    assert(found and menu.run_context(found))
+    assert(h.preview('key')==0 and h.get('key')==112)
+    assert(menu.apply_page(mod,page));assert(h.get('key')==0)
+    assert(Menu.key_name(0)=='Not bound')
+end)
+test('context unbind clears native keyboard binding through guarded callback',function()
+    local f=fixture();f.menu.compose(1920,1080)
+    assert(f.menu.open_context({kind='control',mod=f.source,page=f.source.pages[1],control=f.control},100,100))
+    local found
+    for i,item in ipairs(f.menu.context_menu.items)do if item.label=='Unbind key'then found=i;assert(item.enabled)end end
+    assert(found and f.menu.run_context(found))
+    assert(f.commits[1]==0 and not f.menu.capture);f.clean()
+end)
 test('Enter captures a native key and saves through its callback only',function()
     local f=fixture();f.menu.key(13);assert(f.menu.capture==f.control)
     assert(field(f.menu,'Press a key'));f.menu.key(113)

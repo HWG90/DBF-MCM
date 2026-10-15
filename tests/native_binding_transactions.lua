@@ -149,7 +149,7 @@ test('full record and keyboard chords refuse without modifying bytes',function()
  assert(not N.replace_keyboard(record({keyboard,keyboard}),165))
  assert(not N.replace_keyboard(record({mapping(67,161,0,1,0)}),165))
  assert(not N.replace_keyboard(record({mapping(3+8*16,161,0,0,0)}),165))
- for _,unsupported in ipairs({0,56,305,65535})do assert(not N.replace_keyboard(record({keyboard}),unsupported))end
+ for _,unsupported in ipairs({56,305,65535})do assert(not N.replace_keyboard(record({keyboard}),unsupported))end
 end)
 test('successful bind writes native action and persists stable binding id',function()
  local f=fixture();local baseline=N.fingerprint(f.bytes);assert(f.service.bind(f.record,116))
@@ -326,5 +326,29 @@ test('Windows backend rechecks owner before committing a mapping count',function
  f.change_owner_after_payload=true;assert(not f.backend.write(token,edited))
  assert(#f.writes==1,'count written after native ownership changed')
  assert(not f.state.assignments.dirty)
+end)
+test('unbind preserves mouse and controller records and survives restart',function()
+ local f=fixture();local original=f.bytes
+ assert(f.service.bind(f.record,0))
+ assert(word(f.bytes,4)==2)
+ assert(f.bytes:sub(9,28)==mouse and f.bytes:sub(29,48)==pad)
+ local cleared=f.bytes
+ local restarted=fixture({bytes=original,saved=f.saved})
+ restarted.service.poll(restarted.host,{restarted.record})
+ assert(restarted.bytes==cleared and restarted.acks==1)
+ -- Rebinding after clearing retains the original startup baseline.
+ assert(f.service.bind(f.record,116))
+ local rebound=fixture({bytes=original,saved=f.saved})
+ rebound.service.poll(rebound.host,{rebound.record})
+ assert(rebound.bytes==f.bytes)
+end)
+test('unbind rolls back if persistence fails',function()
+ local f=fixture();local original=f.bytes;f.fail_save=true
+ assert(not f.service.bind(f.record,0))
+ assert(f.bytes==original and f.acks==0)
+end)
+test('empty keyboard mapping clears safely without changing other inputs',function()
+ local original=record({mouse,pad});local cleared=N.replace_keyboard(original,0)
+ assert(cleared==original)
 end)
 print('Native binding transaction contracts passed: '..count)

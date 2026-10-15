@@ -19,6 +19,7 @@ function M.text_size(size,role,scale)
     return 20*(scale or 1)*ratio,role
 end
 function M.key_name(code)
+    if code==0 then return 'Not bound'end
     local names={[8]='Backspace',[9]='Tab',[13]='Enter',[16]='Shift',[17]='Ctrl',[18]='Alt',[27]='Esc',[32]='Space',
         [33]='Page Up',[34]='Page Down',[35]='End',[36]='Home',[37]='Left',[38]='Up',[39]='Right',[40]='Down',[45]='Insert',[46]='Del'}
     if names[code]then return names[code]end

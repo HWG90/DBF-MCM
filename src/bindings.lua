@@ -76,7 +76,7 @@ local function binding_label(record,options)
     return resolved or native_labels[record.label]or readable_id(record.id)
 end
 local native_description='Mod Bindings Menu owns this binding. Rebind in Options > Mouse & Keyboard > MODS. MCM displays the assigned keys without changing them.'
-local editor_description='Select a binding and press its new key. Escape cancels. MBM evaluates the native action; MCM persists keyboard edits. Later native MODS-page edits take priority.'
+local editor_description='Select a binding and press its new key. Escape cancels. Right-click > Unbind key clears the keyboard mapping. MBM evaluates the native action; MCM persists keyboard edits. Later native MODS-page edits take priority.'
 local function readout(mappings,key_name)
     if #mappings==0 then return 'Not bound' end
     local lines,seen={},{}
@@ -166,7 +166,7 @@ function M.new(api,log,options)
                             end
                             return ok,why
                         end
-                        control.description='Select this binding and press a key to save it. MBM still evaluates the native action; MCM saves this keyboard edit. Mouse/controller mappings and activation type are preserved. Later edits in the game\'s MODS page take priority.'
+                        control.description='Select this binding and press a key to save it. Right-click > Unbind key clears the keyboard mapping. MBM still evaluates the native action; MCM saves this keyboard edit. Mouse/controller mappings and activation type are preserved. Later edits in the game\'s MODS page take priority.'
                     end
                     row.description=row.control.description
                 end
