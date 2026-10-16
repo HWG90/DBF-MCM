@@ -440,6 +440,7 @@ function MODULE.install(context)
                         hit(x-5,y-7,row_width+5,34,function()
                             self.row=row_index;self.focus='settings';change(c,0)
                         end)
+                        right_target({kind='control',mod=mod,page=page,control=c,row=row_index})
                     elseif c.type~='text' and c.type~='section' then
 
                         local value=(mod.handle.preview or mod.handle.get)(c.id);local control=c;local owner=mod

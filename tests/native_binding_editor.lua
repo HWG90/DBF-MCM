@@ -37,6 +37,22 @@ local function field(menu,value)
     end
     error('Missing native binding field '..tostring(value))
 end
+test('mouse right-click on standalone and mounted native fields exposes unbind',function()
+    for _,mounted in ipairs({false,true})do
+        local f=fixture(mounted);local command=field(f.menu,'F1')
+        f.menu.tick({down=function(vk)return vk==2 end,mouse=function()return command.x+2,command.y end})
+        assert(f.menu.context_menu,'Native field did not open context menu')
+        local item
+        for _,draw in ipairs(f.menu.compose(1920,1080))do
+            if draw.text=='Unbind key' then item=draw;break end
+        end
+        assert(item,'Unbind action was not rendered')
+        f.menu.tick({down=function()return false end,mouse=function()return item.x+2,item.y end})
+        f.menu.tick({down=function(vk)return vk==1 end,mouse=function()return item.x+2,item.y end})
+        assert(f.commits[1]==0 and not f.menu.capture,'Mouse unbind did not invoke native clear')
+        f.clean()
+    end
+end)
 test('ordinary keybind unbind stages and applies zero with a readable label',function()
     local saved={}
     local api=Core.new({load=function()return {}end,save=function(_,v)saved=v;return true end})
