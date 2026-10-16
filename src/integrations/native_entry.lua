@@ -227,7 +227,7 @@ end
 
 function N.new(api,options)
     options=options or {};local env=options.env or _G
-    local self={};local backend,verified,retired,retiring,record,parent,gameplay,wrapper,previous,pending_close
+    local self={};local backend,verified,retired,retiring,record,parent,gameplay,wrapper,previous,pending_close;local installed=false
     local bridge,hud_bridge;local hud_wait=false;local last_reason;local last_mom_scan,last_mom_detail;local last_state;local last_selection
     local function note(reason)if reason~=last_reason then last_reason=reason;if options.log then options.log('MCM native entry: '..tostring(reason))end end end
     local function initialize()
@@ -270,7 +270,7 @@ function N.new(api,options)
         end
         if snapshot.count>=L.capacity then return false,'Native tab bar is full'end
         -- A late MOM installation must be bridged before it sees our fourth slot.
-        if rawget(env,'ModOptionsMenu')and not rawget(env,'ModOptionsMenu').mcm_compat and not bridge then return false,'Waiting for cooperative MODS tab owner'end
+        if not options.direct_tab and rawget(env,'ModOptionsMenu')and not rawget(env,'ModOptionsMenu').mcm_compat and not bridge then return false,'Waiting for cooperative MODS tab owner'end
         if bridge and snapshot.count==3 then return false,'Waiting for native MODS tab registration'end
         local labels=copy(snapshot.labels);labels[#labels+1]=L.template
         backend.apply_tabs(screen,labels,snapshot.current);backend.show_text(screen,snapshot.count)
@@ -421,7 +421,7 @@ function N.new(api,options)
         if retired then return end
         if retiring then return false,'Native entry cleanup pending'end
         local valid,why=initialize();if not valid then return false,why end
-        install_bridge()
+        if not options.direct_tab then install_bridge()end
         install_hud_bridge()
         local screen,status=backend.escape_menu()
         local transition=status..'/mods='..tostring(bridge~=nil)..'/hud='..tostring(hud_bridge~=nil)..'/slot='..tostring(hud_bridge and hud_bridge.instance.slot)
@@ -490,28 +490,34 @@ function N.new(api,options)
         return true
     end
     function self.status()
-        return {verified=verified==true,installed=wrapper~=nil,retired=retired==true,retiring=retiring==true,index=record and record.index,gameplay_baseline=gameplay~=nil,parent=parent,reason=last_reason,mom_scan=last_mom_detail,pending_close=pending_close~=nil}
+        return {verified=verified==true,installed=installed,direct_tab=options.direct_tab==true,driver=options.lifecycle_driven and 'lifecycle' or 'wrapper',retired=retired==true,retiring=retiring==true,index=record and record.index,gameplay_baseline=gameplay~=nil,parent=parent,reason=last_reason,mom_scan=last_mom_detail,pending_close=pending_close~=nil}
     end
     function self.close()
         retiring=true
         pending_close=nil
         if parent then local ok,why=parent.on_close();if not ok then return false,why end end
         if verified then local ok,why=remove();if not ok then return false,why end end
-        retired=true
+        retired=true;installed=false
         release_hud_bridge()
         if bridge then local current=select(2,debug.getupvalue(bridge.step,bridge.slot));if current==bridge.hook then debug.setupvalue(bridge.step,bridge.slot,bridge.original)end;bridge=nil end
         if wrapper and rawget(env,'update')==wrapper then rawset(env,'update',previous)end
         return true
     end
     function self.install(ctx)
-        if wrapper or retired then return false,'Native entry is already installed or retired'end
+        if installed or retired then return false,'Native entry is already installed or retired'end
         local valid,why=initialize();if not valid then return false,why end
+        if options.lifecycle_driven then
+            installed=true
+            if ctx and ctx.on_cleanup then ctx.on_cleanup(self.close)end
+            return true
+        end
         previous=rawget(env,'update');if type(previous)~='function'then return false,'Game update callback unavailable'end
         wrapper=function(...)
             if not retired then local ok,why=pcall(self.step);if not ok then note(why)end end
             return previous(...)
         end
         rawset(env,'update',wrapper)
+        installed=true
         if ctx and ctx.on_cleanup then ctx.on_cleanup(self.close)end
         return true
     end

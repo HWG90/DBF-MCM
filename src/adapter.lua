@@ -33,7 +33,7 @@ local function close()
     api,menu,input=nil,nil,nil;binding_host=nil;held_toggle=false
 end
 return {
-    name='Mod Configuration Menu (Preview)',version='0.1.64',author='Goose',
+    name='Mod Configuration Menu (Preview)',version='0.1.65',author='Goose',
     description='Shared mod settings. DEL opens MCM; a guarded MCM tab also opens it from the Escape menu.',
     on_enable=function(ctx)
         assert(ctx.api==2 and type(ctx.global)=='function' and type(ctx.on_cleanup)=='function','MDL API 2 required')
@@ -263,7 +263,7 @@ return {
             if input.down(1)or input.down(2)then return false,'Waiting for the native menu click to release'end
             return true
         end
-        native_entry=MCM.native_entry.new(api,{window=sr.Window,log=ctx.log,dismiss_escape=true,
+        native_entry=MCM.native_entry.new(api,{window=sr.Window,log=ctx.log,dismiss_escape=true,lifecycle_driven=true,direct_tab=true,
             dependencies={memory=MCM.native_memory,runtime=MCM.native_runtime},
             focused=function()input.poll();return input.focused()end,
             can_open=native_open_ready,
@@ -290,7 +290,7 @@ return {
             end})
         -- Adapter cleanup restores capture first, then native selection and hook ownership.
         local native_ok,native_why=native_entry.install()
-        if not native_ok then ctx.log('MCM native entry unavailable: '..tostring(native_why))else ctx.log('MCM native entry: verified update hook installed')end
+        if not native_ok then ctx.log('MCM native entry unavailable: '..tostring(native_why))else ctx.log('MCM native entry: lifecycle polling enabled; no extra update hook')end
         function api.integration_status()return {hud=hud_runtime and hud_runtime.diagnostic(),native=native_entry and native_entry.status()}end
 
 
@@ -299,8 +299,7 @@ return {
         if retired or not api then return end
         local ok,err=pcall(function()
             input.poll()
-            -- Loaders can cache their update entry; lifecycle polling still
-            -- runs even when a newly installed global wrapper is not called.
+            -- Sole native-entry driver, including loaders that cache update.
             if native_entry then native_entry.step()end
             hud_timer=hud_timer+math.max(0,tonumber(dt)or 0)
             if hud_timer>=.25 then

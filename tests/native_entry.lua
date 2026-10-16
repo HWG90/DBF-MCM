@@ -163,6 +163,32 @@ test('breadth first discovery reaches nearby MOM before a large side-helper tree
     assert(f.entry.close())
 end)
 
+test('direct native row appends without discovering or rewriting MODS callbacks',function()
+    local f=fixture(1,true,{direct_tab=true})
+    local update=f.env.update;local register=f.env.ModOptionsMenu.register_option
+    assert(f.entry.install());f.entry.step()
+    assert(not f.entry.status().mom_scan,'Direct row performed callback discovery')
+    f.open_escape();assert(f.entry.step())
+    assert(f.entry.status().index==5 and f.b.count==6,'Direct MCM row not appended after existing tabs')
+    assert(f.b.labels[4]==L.template and f.b.labels[5]==0x120001,'Existing MODS/HUD labels changed')
+    for i=1,120 do assert(f.entry.step())end
+    assert(not f.entry.status().mom_scan,'Direct row retried callback discovery')
+    assert(f.env.update~=update,'Fixture wrapper should be installed in non-lifecycle mode')
+    assert(f.env.ModOptionsMenu.register_option==register,'Direct row rewrote provider')
+    assert(f.entry.close()and f.env.update==update and f.b.count==5)
+end)
+
+test('direct lifecycle row selects MCM through normal native ownership and detach handoff',function()
+    local f=fixture(0,true,{direct_tab=true,lifecycle_driven=true})
+    local update=f.env.update
+    assert(f.entry.install());f.entry.step();f.open_escape();assert(f.entry.step())
+    assert(f.env.update==update and not f.entry.status().mom_scan)
+    f.b.current=f.entry.status().index;f.b.foreground=true
+    assert(f.entry.step()and f.api.is_open(),'Native MCM selection did not open the menu')
+    f.set_open(false);f.b.current=0
+    assert(f.entry.close())
+end)
+
 test('matching constants on foreign MOM state do not authorize a callback rewrite',function()
     local f=fixture(0,true)
     local state={};local TAB_BAR,MODS_TAB=1248,3
@@ -397,6 +423,17 @@ test('a later tab owner blocks removal rather than shifting its fixed native ind
     local ok,why=f.entry.close();assert(not ok and why:find('follows MCM',1,true)and f.b.count==6 and f.b.owners[5]=='Later HUD')
     f.b.current=4;assert(f.entry.step()==false and not f.parent(),'pending cleanup accepted a new native opening')
     f.b.count=5;f.b.labels[6]=nil;assert(f.entry.close()and f.b.count==4)
+end)
+
+test('lifecycle polling uses no extra global hook and checks once per update',function()
+    local f=fixture(0,true,{lifecycle_driven=true});local original=f.env.update
+    local checks=0;local step=f.entry.step;f.entry.step=function(...)checks=checks+1;return step(...)end
+    assert(f.entry.install() and f.env.update==original and f.entry.status().driver=='lifecycle')
+    assert(not f.entry.install())
+    for frame=1,100 do f.env.update();f.entry.step()end
+    assert(checks==100 and #f.b.game_counts==100,'native check duplicated or game chain skipped')
+    f.open_escape();f.entry.step();assert(f.b.count==5,'native menu entry unavailable with lifecycle driver')
+    assert(f.entry.close() and f.env.update==original and not f.entry.status().installed)
 end)
 
 test('cleanup preserves newer update wrappers and retired native work becomes inert',function()
