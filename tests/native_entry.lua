@@ -4,10 +4,13 @@ local L=Native.layout
 local count=0
 local function test(name,fn)fn();count=count+1;print('PASS '..name)end
 local function copy(value)local result={};for key,item in pairs(value)do result[key]=item end;return result end
-local function stripped(fn)
+local function upvalue(fn,wanted)
+    for index=1,64 do local name,value=debug.getupvalue(fn,index);if not name then break end;if name==wanted then return value,index end end
+end
+local function stripped(fn,source)
     local values={}
     for index=1,64 do local name,value=debug.getupvalue(fn,index);if not name then break end;values[index]={value=value}end
-    local loaded=assert(loadstring(string.dump(fn,true)))
+    local loaded=assert(loadstring(string.dump(fn,true),source))
     for index,value in ipairs(values)do assert(debug.setupvalue(loaded,index,value.value)~=nil)end
     assert(select(1,debug.getupvalue(loaded,1))=='','fixture did not strip upvalue names')
     return loaded
@@ -58,7 +61,10 @@ local function fixture(extra_tabs,with_mom,extra_options)
         end
         local step=function()
             assert(TAB_BAR==L.bar and MODS_TAB==3)
-            if state.phase=='open'then assert(ensure_mods_tab(state.screen),'MODS ownership rejected')end
+            if state.phase=='open'then
+                assert(ensure_mods_tab(state.screen),'MODS ownership rejected')
+                if state.current==MODS_TAB then state.mom_views=(state.mom_views or 0)+1 end
+            end
         end
         local previous_update=game
         env.update=function(...)step();return previous_update(...)end
@@ -163,16 +169,68 @@ test('breadth first discovery reaches nearby MOM before a large side-helper tree
     assert(f.entry.close())
 end)
 
-test('direct native row appends without discovering or rewriting MODS callbacks',function()
+test('forwarding pass reaches MOM through forty profiled mods and stripped source boundaries',function()
+    local f=fixture(0,true,{direct_tab=true,lifecycle_driven=true})
+    local profiler=assert(loadstring([[return function(target)
+        local handler=function()return true end
+        return function(...)if select('#',...)<0 then handler()end;return target(...)end
+    end]],'@mods/patpatpatrick/mod_lag_finder.lua'))()
+    local wrapper=assert(loadstring([[return function(previous_update)
+        local function helpers(depth)
+            if depth==0 then return function()return true end end
+            local run,finish=helpers(depth-1),helpers(depth-1)
+            return function(...)if select('#',...)<0 then return run(...)end;return finish(...)end
+        end
+        local step=helpers(7)
+        return function(...)if select('#',...)<0 then step(...)end;return previous_update(...)end
+    end]],'@mods/example/profiled_mod.lua'))()
+    local dispatcher=assert(loadstring([[return function(previous)
+        local first=function()return true end
+        local third=function()return true end
+        local fourth=function()return true end
+        return function(...)
+            if select('#',...)<0 then first();third();fourth()end
+            return previous(...)
+        end
+    end]],'@core/wwise/lua/wwise_flow_callbacks.lua'))()
+    for index=1,40 do
+        f.env.update=profiler(wrapper(f.env.update))
+        if index%8==0 then f.env.update=stripped(dispatcher(f.env.update),'@core/wwise/lua/wwise_flow_callbacks.lua')end
+    end
+    assert(f.entry.install());f.entry.step()
+    local scan=assert(f.entry.status().mom_scan)
+    assert(scan.forward_nodes>32 and scan.forward_nodes<=256 and scan.fallback_nodes==0,'linear forwarding fell into helper BFS')
+    f.open_escape();assert(f.entry.step());f.b.current=3;f.env.update()
+    assert(f.b.count==5 and f.b.mom_views==1 and f.b.mom_counts[#f.b.mom_counts]==4)
+    assert(f.entry.close())
+end)
+
+test('failed authentication backs off and identity changes retry immediately',function()
+    local f=fixture(0,true,{direct_tab=true,lifecycle_driven=true})
+    f.env.update=function()return true end
+    assert(f.entry.install());f.entry.step();local first=assert(f.entry.status().mom_scan)
+    for index=1,60 do f.entry.step();assert(f.entry.status().mom_scan==first,'failed scanner ran every frame')end
+    f.entry.step();local second=f.entry.status().mom_scan;assert(second~=first,'bounded scanner never retried')
+    local previous=f.env.update;f.env.update=function(...)return previous(...)end
+    f.entry.step();local third=f.entry.status().mom_scan;assert(third~=second,'update replacement did not invalidate scan backoff')
+    f.env.ModOptionsMenu={api=1,register_option=f.env.ModOptionsMenu.register_option}
+    f.entry.step();local fourth=f.entry.status().mom_scan;assert(fourth~=third,'provider replacement did not invalidate scan backoff')
+    local state=f.b;f.env.ModOptionsMenu.register_option=function()return state.count end
+    f.entry.step();assert(f.entry.status().mom_scan~=fourth,'registration replacement did not invalidate scan backoff')
+    assert(f.b.writes==0 and f.entry.close())
+end)
+
+test('direct native row preserves authenticated MODS and peer tabs',function()
     local f=fixture(1,true,{direct_tab=true})
     local update=f.env.update;local register=f.env.ModOptionsMenu.register_option
     assert(f.entry.install());f.entry.step()
-    assert(not f.entry.status().mom_scan,'Direct row performed callback discovery')
+    assert(f.entry.status().mom_scan,'Direct row omitted required MODS cooperation')
     f.open_escape();assert(f.entry.step())
     assert(f.entry.status().index==5 and f.b.count==6,'Direct MCM row not appended after existing tabs')
     assert(f.b.labels[4]==L.template and f.b.labels[5]==0x120001,'Existing MODS/HUD labels changed')
     for i=1,120 do assert(f.entry.step())end
-    assert(not f.entry.status().mom_scan,'Direct row retried callback discovery')
+    local scan=f.entry.status().mom_scan
+    f.env.update();assert(f.entry.status().mom_scan==scan,'Stable direct row repeated callback discovery')
     assert(f.env.update~=update,'Fixture wrapper should be installed in non-lifecycle mode')
     assert(f.env.ModOptionsMenu.register_option==register,'Direct row rewrote provider')
     assert(f.entry.close()and f.env.update==update and f.b.count==5)
@@ -182,11 +240,64 @@ test('direct lifecycle row selects MCM through normal native ownership and detac
     local f=fixture(0,true,{direct_tab=true,lifecycle_driven=true})
     local update=f.env.update
     assert(f.entry.install());f.entry.step();f.open_escape();assert(f.entry.step())
-    assert(f.env.update==update and not f.entry.status().mom_scan)
+    assert(f.env.update==update and f.entry.status().mom_scan)
     f.b.current=f.entry.status().index;f.b.foreground=true
     assert(f.entry.step()and f.api.is_open(),'Native MCM selection did not open the menu')
     f.set_open(false);f.b.current=0
     assert(f.entry.close())
+end)
+
+test('direct lifecycle fifth tab lets MOM render rows with four and returns five to the game',function()
+    local f=fixture(0,true,{direct_tab=true,lifecycle_driven=true})
+    local update=f.env.update;local step=upvalue(update,'step');local original=upvalue(step,'ensure_mods_tab')
+    assert(f.entry.install());f.entry.step();f.open_escape();assert(f.entry.step())
+    f.b.current=3;local a,b,c,d=f.env.update(.1,'arg')
+    assert(a=='first'and b==nil and c=='last'and d==2)
+    assert(f.b.count==5 and f.b.mom_counts[#f.b.mom_counts]==4 and f.b.mom_views==1)
+    assert(f.b.game_counts[#f.b.game_counts]==5 and f.env.update==update,'full count or lifecycle forwarding changed')
+    assert(f.entry.close()and upvalue(step,'ensure_mods_tab')==original and f.b.count==4)
+end)
+
+test('direct MOM error restores five and pending teardown retains the wrapper until acknowledgement',function()
+    local f=fixture(0,true,{direct_tab=true,lifecycle_driven=true})
+    local step=upvalue(f.env.update,'step');local original=upvalue(step,'ensure_mods_tab')
+    assert(f.entry.install());f.entry.step();f.open_escape();assert(f.entry.step())
+    local hook=upvalue(step,'ensure_mods_tab');assert(hook~=original)
+    f.b.fail_mom=true;local okay,why=pcall(f.env.update)
+    assert(not okay and tostring(why):find('MOM failure',1,true)and f.b.count==5)
+    f.b.fail_mom=false;f.b.phase='covered';assert(f.entry.close()==false)
+    assert(upvalue(step,'ensure_mods_tab')==hook and not f.entry.status().retired,'pending teardown released its callback lease')
+    f.b.phase='open';f.b.current=3;f.env.update();assert(f.b.mom_views==1 and f.b.count==5)
+    assert(f.entry.close()and upvalue(step,'ensure_mods_tab')==original and f.b.count==4)
+end)
+
+test('provider replacement restores the old owned callback and authenticates the new provider',function()
+    local f=fixture(0,true,{direct_tab=true,lifecycle_driven=true})
+    local old_step=upvalue(f.env.update,'step');local old_original=upvalue(old_step,'ensure_mods_tab')
+    assert(f.entry.install());f.entry.step();f.open_escape();assert(f.entry.step())
+    local state=f.b;local TAB_BAR,MODS_TAB=1248,3
+    local ensure_mods_tab=function(screen)
+        assert(screen==state.screen and state.count==4);state.replacement_rows=(state.replacement_rows or 0)+1;return true
+    end
+    local replacement=ensure_mods_tab
+    local step=function()assert(TAB_BAR==L.bar and MODS_TAB==3 and state);return ensure_mods_tab(state.screen)end
+    f.env.ModOptionsMenu={api=1,register_option=function()return state.count end}
+    f.env.update=function()return step()end
+    assert(f.entry.step()and upvalue(old_step,'ensure_mods_tab')==old_original)
+    assert(upvalue(step,'ensure_mods_tab')~=replacement and f.env.update())
+    assert(state.replacement_rows==1 and state.count==5)
+    assert(f.entry.close()and upvalue(step,'ensure_mods_tab')==replacement and state.count==4)
+end)
+
+test('cleanup never overwrites a later wrapper around the owned MOM callback',function()
+    local f=fixture(0,true,{direct_tab=true,lifecycle_driven=true})
+    local step=upvalue(f.env.update,'step');local original,slot=upvalue(step,'ensure_mods_tab')
+    assert(f.entry.install());f.entry.step();f.open_escape();assert(f.entry.step())
+    local inner=upvalue(step,'ensure_mods_tab');local newer=function(...)return inner(...)end
+    debug.setupvalue(step,slot,newer)
+    assert(f.entry.close()and upvalue(step,'ensure_mods_tab')==newer and f.b.count==4)
+    f.env.update();assert(f.b.count==4 and f.b.mom_counts[#f.b.mom_counts]==4)
+    assert(original~=inner)
 end)
 
 test('matching constants on foreign MOM state do not authorize a callback rewrite',function()
@@ -202,6 +313,18 @@ test('matching constants on foreign MOM state do not authorize a callback rewrit
     local found
     for index=1,64 do local name,value=debug.getupvalue(fake_step,index);if not name then break end;if name=='ensure_mods_tab'then found=value end end
     assert(found==original,'foreign callback was patched');assert(f.entry.close())
+end)
+
+test('direct native row also waits for an authenticated MODS owner',function()
+    local f=fixture(0,true,{direct_tab=true,lifecycle_driven=true})
+    local state={};local TAB_BAR,MODS_TAB=1248,3
+    local ensure_mods_tab=function()return state end
+    local fake_step=function()assert(TAB_BAR==L.bar and MODS_TAB==3);assert(state);return ensure_mods_tab()end
+    f.env.update=fake_step
+    assert(f.entry.install());f.entry.step();f.open_escape()
+    local okay,why=f.entry.step()
+    assert(not okay and why=='Waiting for cooperative MODS tab owner'and f.b.writes==0)
+    assert(upvalue(fake_step,'ensure_mods_tab')==ensure_mods_tab and f.entry.close())
 end)
 
 test('deep stripped chains are bounded and stripped API state is never guessed',function()

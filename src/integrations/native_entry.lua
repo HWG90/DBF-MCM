@@ -160,7 +160,7 @@ local function upvalue(fn,wanted)
     for index=1,64 do local name,value=debug.getupvalue(fn,index);if not name then break end;if name==wanted then return value,index end end
 end
 local function mom_step(env,root)
-    local diagnostic={nodes=0,candidates=0,state=false,node_limit=256,depth_limit=32,c_skipped=0,depth_limited=0,budget_exhausted=false,candidate_details={}}
+    local diagnostic={nodes=0,candidates=0,state=false,node_limit=512,depth_limit=32,c_skipped=0,depth_limited=0,budget_exhausted=false,candidate_details={},forward_nodes=0,forward_limit=256,forward_depth_limit=256,fallback_nodes=0}
     local host=rawget(env,'ModOptionsMenu')
     local register=type(host)=='table'and rawget(host,'register_option')
     local api_state=type(register)=='function'and upvalue(register,'state')
@@ -184,20 +184,69 @@ local function mom_step(env,root)
         local result={};for slot=1,64 do local name=debug.getupvalue(fn,slot);if not name then break end;result[#result+1]=name~=''and name or '<anonymous>'end
         return table.concat(result,',')
     end
-    enqueue(root or rawget(env,'update'),0)
-    while at<=#queue and diagnostic.nodes<256 do
-        local node=queue[at];at=at+1;local fn,depth=node.fn,node.depth
+    local function inspect(fn,info)
         diagnostic.nodes=diagnostic.nodes+1
         local ensure,slot=upvalue(fn,'ensure_mods_tab')
         if type(ensure)=='function'then
             diagnostic.candidates=diagnostic.candidates+1
             diagnostic.bar=upvalue(fn,'TAB_BAR');diagnostic.tab=upvalue(fn,'MODS_TAB')
             diagnostic.step_state=upvalue(fn,'state')==api_state;diagnostic.ensure_state=upvalue(ensure,'state')==api_state
-            diagnostic.candidate_short_src=node.info.short_src;diagnostic.candidate_upvalues=names(fn)
+            diagnostic.candidate_short_src=info.short_src;diagnostic.candidate_upvalues=names(fn)
             local info=debug.getinfo(ensure,'S');diagnostic.ensure_short_src=info and info.short_src;diagnostic.ensure_upvalues=names(ensure)
             if #diagnostic.candidate_details<8 then diagnostic.candidate_details[#diagnostic.candidate_details+1]={short_src=diagnostic.candidate_short_src,upvalues=diagnostic.candidate_upvalues,ensure_short_src=diagnostic.ensure_short_src,ensure_upvalues=diagnostic.ensure_upvalues,bar=diagnostic.bar,tab=diagnostic.tab,step_state=diagnostic.step_state,ensure_state=diagnostic.ensure_state}end
         end
         if type(ensure)=='function'and upvalue(fn,'TAB_BAR')==L.bar and upvalue(fn,'MODS_TAB')==3 and upvalue(fn,'state')==api_state and upvalue(ensure,'state')==api_state then return fn,slot,ensure,diagnostic end
+    end
+    -- Walk update forwarding before helper trees. Profilers add one target
+    -- wrapper per mod, making the real owner much deeper than a helper BFS.
+    -- Source changes are discovery hints only; inspect still authenticates the
+    -- exact API state, callback state and native tab constants above.
+    local forwarding={'previous_update','original_update','originalUpdate','previousUpdate','previous','original','old_update','oldUpdate','upstream','next_update','inner','target','callback','dispatch','base','handler'}
+    local stack={{fn=root or rawget(env,'update'),depth=0}};local traversed,inspected={},{}
+    local function forward_inspect(fn,info)
+        if inspected[fn]or diagnostic.forward_nodes>=diagnostic.forward_limit then return end
+        inspected[fn]=true;diagnostic.forward_nodes=diagnostic.forward_nodes+1
+        return inspect(fn,info)
+    end
+    while #stack>0 and diagnostic.forward_nodes<diagnostic.forward_limit do
+        local node=table.remove(stack);local fn,depth=node.fn,node.depth
+        local info=type(fn)=='function'and debug.getinfo(fn,'S')
+        if info and info.what~='C'and not traversed[fn]and depth<=diagnostic.forward_depth_limit then
+            traversed[fn]=true
+            local found,slot,ensure=forward_inspect(fn,info);if found then return found,slot,ensure,diagnostic end
+            local values,anonymous={},{}
+            for index=1,64 do
+                local name,value=debug.getupvalue(fn,index);if not name then break end
+                if name==''then anonymous[#anonymous+1]=value else values[name]=value end
+            end
+            for _,name in ipairs({'step','update'})do
+                local child=values[name];local child_info=type(child)=='function'and debug.getinfo(child,'S')
+                if child_info and child_info.what~='C'then
+                    found,slot,ensure=forward_inspect(child,child_info);if found then return found,slot,ensure,diagnostic end
+                end
+            end
+            local children={}
+            for _,name in ipairs(forwarding)do if type(values[name])=='function'then children[#children+1]=values[name]end end
+            local hook=values.hook
+            if type(hook)=='table'and type(rawget(hook,'base'))=='function'then
+                local driver=rawget(hook,'driver')
+                if type(driver)=='table'and type(rawget(driver,'frame'))=='function'then
+                    children[#children+1]=hook.base;children[#children+1]=driver.frame
+                end
+            end
+            for _,child in ipairs(anonymous)do
+                local child_info=type(child)=='function'and debug.getinfo(child,'S')
+                if child_info and child_info.what~='C'and child_info.source~=info.source then children[#children+1]=child end
+            end
+            for index=#children,1,-1 do stack[#stack+1]={fn=children[index],depth=depth+1}end
+        end
+    end
+    diagnostic.forward_exhausted=#stack>0
+    enqueue(root or rawget(env,'update'),0)
+    while at<=#queue and diagnostic.fallback_nodes<256 do
+        local node=queue[at];at=at+1;local fn,depth=node.fn,node.depth
+        diagnostic.fallback_nodes=diagnostic.fallback_nodes+1
+        local found,slot,ensure=inspect(fn,node.info);if found then return found,slot,ensure,diagnostic end
         -- Breadth first: helper trees cannot consume the whole budget before
         -- a nearby update-chain sibling. Prioritize actual forwarding edges.
         for _,name in ipairs({'previous_update','original_update','originalUpdate','previousUpdate','previous','original','old_update','oldUpdate','upstream','next_update','inner','step','update','run','finish'})do
@@ -221,14 +270,14 @@ local function mom_step(env,root)
             if type(value)=='function'then enqueue(value,depth+1)end
         end
     end
-    diagnostic.budget_exhausted=at<=#queue
+    diagnostic.budget_exhausted=at<=#queue or diagnostic.forward_exhausted
     return nil,nil,nil,diagnostic
 end
 
 function N.new(api,options)
     options=options or {};local env=options.env or _G
     local self={};local backend,verified,retired,retiring,record,parent,gameplay,wrapper,previous,pending_close;local installed=false
-    local bridge,hud_bridge;local hud_wait=false;local last_reason;local last_mom_scan,last_mom_detail;local last_state;local last_selection
+    local bridge,hud_bridge;local bridge_retry;local hud_wait=false;local last_reason;local last_mom_scan,last_mom_detail;local last_state;local last_selection
     local function note(reason)if reason~=last_reason then last_reason=reason;if options.log then options.log('MCM native entry: '..tostring(reason))end end end
     local function initialize()
         if verified then return true end
@@ -270,25 +319,47 @@ function N.new(api,options)
         end
         if snapshot.count>=L.capacity then return false,'Native tab bar is full'end
         -- A late MOM installation must be bridged before it sees our fourth slot.
-        if not options.direct_tab and rawget(env,'ModOptionsMenu')and not rawget(env,'ModOptionsMenu').mcm_compat and not bridge then return false,'Waiting for cooperative MODS tab owner'end
+        if rawget(env,'ModOptionsMenu')and not rawget(env,'ModOptionsMenu').mcm_compat and not bridge then return false,'Waiting for cooperative MODS tab owner'end
         if bridge and snapshot.count==3 then return false,'Waiting for native MODS tab registration'end
         local labels=copy(snapshot.labels);labels[#labels+1]=L.template
         backend.apply_tabs(screen,labels,snapshot.current);backend.show_text(screen,snapshot.count)
         record={screen=screen,index=snapshot.count,labels=copy(snapshot.labels),previous=snapshot.current,previous_shown=snapshot.shown}
         return true
     end
+    local function release_bridge()
+        if not bridge then return end
+        bridge.active=false
+        local current=select(2,debug.getupvalue(bridge.step,bridge.slot))
+        if current==bridge.hook then debug.setupvalue(bridge.step,bridge.slot,bridge.original)end
+        bridge=nil;bridge_retry=nil
+    end
     local function install_bridge()
-        if bridge then return true end
+        local host=rawget(env,'ModOptionsMenu')
+        local register=type(host)=='table'and rawget(host,'register_option')
+        if bridge then
+            local current=select(2,debug.getupvalue(bridge.step,bridge.slot))
+            if bridge.host==host and bridge.register==register and current==bridge.hook then return true end
+            release_bridge()
+        end
+        if type(host)~='table'or host.mcm_compat then bridge_retry=nil;return true end
+        local root=options.mom_step or rawget(env,'update')
+        if bridge_retry and bridge_retry.host==host and bridge_retry.register==register and bridge_retry.root==root and bridge_retry.frames>0 then
+            bridge_retry.frames=bridge_retry.frames-1;return false
+        end
         local step,slot,original,scan=mom_step(env,options.mom_step)
         last_mom_detail=scan
         if not step then
+            bridge_retry={host=host,register=register,root=root,frames=60}
             local message=string.format('MODS owner scan: state=%s nodes=%d limit=%d exhausted=%s candidates=%d bar=%s tab=%s step_state=%s ensure_state=%s src=%q upvalues=%q ensure_src=%q ensure_upvalues=%q',tostring(scan.state),scan.nodes,scan.node_limit,tostring(scan.budget_exhausted),scan.candidates,tostring(scan.bar),tostring(scan.tab),tostring(scan.step_state),tostring(scan.ensure_state),scan.candidate_short_src or '',scan.candidate_upvalues or '',scan.ensure_short_src or '',scan.ensure_upvalues or '')
             if message~=last_mom_scan then last_mom_scan=message;if options.log then options.log('MCM native entry: '..message)end end
             return false
         end
+        bridge_retry=nil
+        local lease={step=step,slot=slot,original=original,host=host,register=register,active=true}
         local hook
         hook=function(screen,...)
-            if retired then return original(screen,...)end
+            if retired or not lease.active or rawget(env,'ModOptionsMenu')~=host
+                or rawget(host,'register_option')~=register then return original(screen,...)end
             -- HUD before() may hide its selected final tab. With no MCM slot
             -- there is nothing to mask, and MOM handles that transient itself.
             if not record then return original(screen,...)end
@@ -303,7 +374,7 @@ function N.new(api,options)
             if not result[1]then error(result[2],0)end
             return unpack(result,2,result.n)
         end
-        debug.setupvalue(step,slot,hook);bridge={step=step,slot=slot,original=original,hook=hook}
+        lease.hook=hook;debug.setupvalue(step,slot,hook);bridge=lease
         if options.log then options.log('MCM native entry: authenticated MODS owner linked (nodes='..scan.nodes..')')end
         return true
     end
@@ -421,7 +492,9 @@ function N.new(api,options)
         if retired then return end
         if retiring then return false,'Native entry cleanup pending'end
         local valid,why=initialize();if not valid then return false,why end
-        if not options.direct_tab then install_bridge()end
+        -- A direct MCM tab still extends MOM's four-tab bar. Only its
+        -- authenticated callback sees the temporary four-tab view.
+        install_bridge()
         install_hud_bridge()
         local screen,status=backend.escape_menu()
         local transition=status..'/mods='..tostring(bridge~=nil)..'/hud='..tostring(hud_bridge~=nil)..'/slot='..tostring(hud_bridge and hud_bridge.instance.slot)
@@ -499,7 +572,7 @@ function N.new(api,options)
         if verified then local ok,why=remove();if not ok then return false,why end end
         retired=true;installed=false
         release_hud_bridge()
-        if bridge then local current=select(2,debug.getupvalue(bridge.step,bridge.slot));if current==bridge.hook then debug.setupvalue(bridge.step,bridge.slot,bridge.original)end;bridge=nil end
+        release_bridge()
         if wrapper and rawget(env,'update')==wrapper then rawset(env,'update',previous)end
         return true
     end
