@@ -107,7 +107,7 @@ function N.windows(options)
   return kernel.dbfmcm_mbm_WriteProcessMemory(process,ffi.cast('void *',at),bytes,#bytes,done)~=0 and tonumber(done[0])==#bytes
  end
  return function(host)
-  if type(host)~='table'or host.api~=1 or host.version~=3 or host.capacity~=36 then return nil,'Unsupported MBM provider' end
+  if type(host)~='table'or host.api~=1 or not(type(host.version)=='number'and host.version>=3) or host.capacity~=36 then return nil,'Unsupported MBM provider' end
   local state=up(host.register_binding,'state');local header=up(host.is_down,'live_header')
   local sweep=up(host.is_down,'sweep_bindings')
   if type(state)~='table'or up(host.is_down,'state')~=state or up(header,'state')~=state or

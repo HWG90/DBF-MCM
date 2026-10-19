@@ -17,7 +17,7 @@ local function text(value,fallback)
     return value
 end
 local function backend(host)
-    if type(host)~='table'or host.api~=1 or host.version~=3 then return nil,'unsupported provider' end
+    if type(host)~='table'or host.api~=1 or not(type(host.version)=='number'and host.version>=3) then return nil,'unsupported provider' end
     local state=upvalue(host.register_binding,'state')
     local header=upvalue(host.is_down,'live_header')
     local read=upvalue(header,'read_words')

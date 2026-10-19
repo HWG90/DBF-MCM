@@ -162,7 +162,7 @@ test('standalone groups avoid repeated Keybindings suffix and mount when an owne
 end)
 test('absent, unsupported and unrelated private registries fail closed',function()
     local api=Core.new();local bridge=Bindings.new(api);bridge.poll(nil,true);assert(#api.list()==0)
-    local f=fixture();f.mapping();f.host.version=4;bridge.poll(f.host,true);assert(#api.list()==0)
+    local f=fixture();f.mapping();f.host.version=2;bridge.poll(f.host,true);assert(#api.list()==0)
     f.host.version=3;f.host.register_binding=function()return true end;bridge.poll(f.host,true);assert(#api.list()==0)
     local g=fixture();g.mapping();assert(g.host.register_binding('firstperson.toggle','Toggle First Person',0,{category='First Person'}))
     g.state.registry['firstperson.toggle'].code=99;bridge.poll(g.host,true);assert(#api.list()==0)
@@ -183,3 +183,5 @@ test('mounted imported rows capture through the editor and refresh the native re
     f.assert_read_only();bridge.release()
 end)
 print(count..' native-binding lookup regressions passed; live game readback remains unverified')
+
+for _,version in ipairs({3,4,5,99})do local f=fixture();f.mapping();local api=setup(f);f.host.version=version;local bridge=Bindings.new(api);bridge.poll(f.host,true);assert(#api.list()>0);f.assert_read_only()end
