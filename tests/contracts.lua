@@ -32,6 +32,7 @@ test('page defaults stage changes without committing or resetting keybindings',f
  local api=core.new();local h=api.register(spec());h.set('toggle',false);h.set('slider',9);h.set('key',80)
  local menu=menu_module.new(api);menu.visible=true;menu.compose(1920,1080)
  local ok,count=menu.reset_page_defaults();assert(ok and count==3)
+ rendered_text(menu,'RESET PAGE TO DEFAULTS');for _,c in ipairs(menu.compose(1920,1080))do assert(c.text~='RESET ONE'and c.text~='RESET PAGE')end
  assert(h.get('toggle')==false and h.get('slider')==9,'reset waits for confirmation')
  assert(h.preview('toggle')==true and h.preview('slider')==5 and h.preview('key')==80)
  h.discard('general');assert(h.preview('slider')==9)
@@ -87,7 +88,7 @@ test('keyboard edits selected settings, defaults and key capture',function()
  local api=core.new();local definition=spec();definition.pages[1].require_confirmation=false
  local h=api.register(definition);local m=menu_module.new(api);m.key(46);m.key(9);m.key(13)
  assert(h.get('toggle')==false)
- local reset=rendered_text(m,'RESET ONE');m.tick({down=function(code)return code==1 end,mouse=function()return reset.x,reset.y end});assert(h.get('toggle')==true)
+ local reset=rendered_text(m,'RESET PAGE TO DEFAULTS');m.tick({down=function(code)return code==1 end,mouse=function()return reset.x,reset.y end});assert(h.get('toggle')==true)
  m.key(40);m.key(39);assert(h.get('slider')==5.5)
  m.key(40);m.key(40);m.key(13);m.key(65);assert(h.get('key')==65 and not m.capture)
  m.key(13);m.key(27);assert(h.get('key')==65 and m.visible)

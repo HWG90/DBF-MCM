@@ -466,18 +466,18 @@ function M.new(api,measure)
 
     function self.reset_page_defaults()
         local mod,page=active()
-        if not mod or not page or not page.require_confirmation then return false,'This page does not support staged reset' end
+        if not mod or not page then return false,'No active page' end
         local count=0
         -- Restore toggles first so their dependent sliders can become editable.
         for pass=1,2 do for _,c in ipairs(page.controls)do
-            if (c.type=='toggle')==(pass==1) and c.id and c.default~=nil and not c.disabled and c.type~='keybind' then
+            if (c.type=='toggle')==(pass==1) and c.id and c.default~=nil and not c.disabled and not c.condition_hidden and c.type~='keybind' then
                 local ok,why=(mod.handle.edit or mod.handle.set)(c.id,c.default)
                 if not ok then return false,why end
                 count=count+1
             end
         end
         end
-        self.notice='Defaults ready to apply; Confirm or Discard'
+        self.notice=page.require_confirmation and 'Defaults ready to apply; Confirm or Discard' or 'Page defaults restored'
         return true,count
     end
 

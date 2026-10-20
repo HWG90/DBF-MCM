@@ -305,19 +305,14 @@ function MODULE.install(context)
             end
 
             local rows=selectable(page);self.row=math.max(1,math.min(self.row,#rows));local selected=rows[self.row]
-            local resettable=selected and selected.default~=nil and not selected.disabled
-            local reset_width=(self.sidebar_width-48)/2
-            surface(20,79,reset_width,34,{enabled=resettable})
-            bounded(27,89,'RESET ONE',13,resettable and white or T.disabled,reset_width-14,nil,'body',79,34)
+            local page_reset=false
+            for _,c in ipairs(page.controls)do
+                if c.id and c.default~=nil and not c.disabled and not c.condition_hidden and c.type~='keybind'then page_reset=true;break end
+            end
+            local reset_width=self.sidebar_width-40
+            surface(20,79,reset_width,34,{enabled=page_reset})
+            bounded(27,89,'RESET PAGE TO DEFAULTS',13,page_reset and white or T.disabled,reset_width-14,nil,'body',79,34)
             hit(20,79,reset_width,34,function()
-                if not resettable then return end
-                local called,ok,reason=pcall(mod.handle.edit or mod.handle.set,selected.id,selected.default)
-                self.notice=called and ok and ('Default restored; '..saved_notice(selected,mod.handle))or tostring(called and reason or ok)
-            end)
-            local page_reset=page.require_confirmation==true
-            surface(28+reset_width,79,reset_width,34,{enabled=page_reset})
-            bounded(35+reset_width,89,'RESET PAGE',13,page_reset and white or T.disabled,reset_width-14,nil,'body',79,34)
-            hit(28+reset_width,79,reset_width,34,function()
                 if not page_reset then return end
                 local called,ok,why=pcall(self.reset_page_defaults)
                 if not called or not ok then self.notice=tostring(called and why or ok)end

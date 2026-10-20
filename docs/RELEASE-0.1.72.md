@@ -1,5 +1,8 @@
-# MCM 0.1.72 - conditional controls
+# MCM 0.1.72 - conditional controls hotfix
 
-Add enabled_if, disabled_if and visible_if predicates with draft-aware getters, set_condition and explicit refresh. Forward legacy registry invalidation to the main catalogue, preserve imported ownership, and retain saved values while cancelling unavailable drafts. Reject stale slider releases safely. DBF random input delay now disables its fixed delay against the current draft. Condition callback errors fail closed without closing the menu. Evaluations occur on mutation or explicit refresh, not during idle drawing.
+- Fix the DBF Randomize input delay crash: its fixed-delay slider disables immediately and rejects stale clicks or drags safely.
+- Add enabled_if, disabled_if and visible_if functions with draft-aware getters, set_condition and explicit refresh. Apply and Discard refresh dependent controls; failed predicates disable or hide their control without closing MCM.
+- Forward legacy registry invalidation to the main catalogue, preserving imported ownership and saved values. Conditions run on changes or explicit refresh, not idle frames.
+- Replace Reset One and Reset Page with one Reset Page to Defaults button. Individual reset remains in the right-click menu. Page reset respects Apply/Discard and preserves keybindings.
 
-Local deployment and live acceptance are recorded under dist/conditional-controls; public publication is not part of this fix.
+BSL live testing confirmed by David. Conditional, stale-drag, legacy/mounted-cache, confirmation/discard, core/UI and package checks passed. Install one MCM provider and restart; existing settings are retained. BSL is the main download; MDL/LLL share the optional ZIP.
