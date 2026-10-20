@@ -243,6 +243,14 @@ function MODULE.install(context)
         return true
     end
     function self.tick(input)
+        -- One native key read per key per UI tick, shared with the console.
+        local source=input;local sampled={};input={}
+        for key,value in pairs(source)do input[key]=value end
+        input.down=function(code)
+            local value=sampled[code]
+            if value==nil then value=source.down(code) and true or false;sampled[code]=value end
+            return value
+        end
         if console then input=console.filter(input,self.visible,state.dt or 0)end
 
         if not self.visible then

@@ -184,4 +184,19 @@ test('mounted imported rows capture through the editor and refresh the native re
 end)
 print(count..' native-binding lookup regressions passed; live game readback remains unverified')
 
-for _,version in ipairs({3,4,5,99})do local f=fixture();f.mapping();local api=setup(f);f.host.version=version;local bridge=Bindings.new(api);bridge.poll(f.host,true);assert(#api.list()>0);f.assert_read_only()end
+local f=fixture();f.host.version=4
+f.host.register_binding('firstperson.toggle','Toggle First Person',0,{category='First Person'})
+f.mapping();local record={id='dbf.next',text='Next stratagem',category='DBF',extended=true}
+f.state.registry[record.id]=record;f.state.extended_order={record}
+f.host.binding=function(id)assert(id==record.id);return{{device='mouse',button='wheel_down',trigger='press'}}end
+local api=Core.new(nil,function()end,Grouping);local bridge=Bindings.new(api)
+bridge.poll(f.host,true);assert(bridge.diagnostic():find('imported=2',1,true))
+local found=false;for _,mod in pairs(api.mods)do for _,p in ipairs(mod.pages)do for _,c in ipairs(p.controls)do if c.native_binding_id=='dbf.next'then assert(c.native_binding_value=='mouse wheel_down (press)');found=true end end end end
+assert(found);bridge.release();print('MBM v4 native plus extended mouse bindings imported')
+
+for _,version in ipairs({3,4,5,99})do
+ local f=fixture();f.mapping();local api=setup(f);f.host.version=version
+ local bridge=Bindings.new(api);bridge.poll(f.host,true)
+ assert(#api.list()>0,'MBM version '..version..' should be accepted');f.assert_read_only()
+end
+print('PASS MBM v3 and newer importer compatibility')

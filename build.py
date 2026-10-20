@@ -12,7 +12,7 @@ for name in ['core','store','console','commands','preferences','platform','view'
     parts.append(f'MCM.{name}=(function()\n'+(ROOT/'src'/f'{name}.lua').read_text(encoding='utf-8')+'\nend)()\n')
 for name in ['theme','text','font','layout','branding','input','render']:
     parts.append(f'MCM.ui_{name}=(function()\n'+(ROOT/'src/ui'/f'{name}.lua').read_text(encoding='utf-8')+'\nend)()\n')
-for name,path in [('native_memory','native_ui/bingus_memory'),('native_runtime','native_ui/bingus_runtime'),('native_entry','integrations/native_entry'),('hud_plus','integrations/hud_plus'),('hud_plus_runtime','integrations/hud_plus_runtime')]:
+for name,path in [('native_memory','native_ui/bingus_memory'),('native_runtime','native_ui/bingus_runtime'),('native_entry','integrations/native_entry'),('hud_plus','integrations/hud_plus'),('hud_plus_runtime','integrations/hud_plus_runtime'),('hud_plus_028','integrations/hud_plus_028'),('hud_plus_028_schema','integrations/hud_plus_028_schema'),('hud_plus_029_schema','integrations/hud_plus_029_schema')]:
     parts.append(f'MCM.{name}=(function()\n'+(ROOT/'src'/f'{path}.lua').read_text(encoding='utf-8')+'\nend)()\n')
 parts.append('MCM.menu=(function(...)\n'+(ROOT/'src/menu.lua').read_text(encoding='utf-8')+'\nend)({theme=MCM.ui_theme,text=MCM.ui_text,layout=MCM.ui_layout,branding=MCM.ui_branding,input=MCM.ui_input,render=MCM.ui_render})\n')
 parts.append('return (function()\n'+(ROOT/'src/adapter.lua').read_text(encoding='utf-8')+'\nend)()\n')

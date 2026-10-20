@@ -353,4 +353,9 @@ test('empty keyboard mapping clears safely without changing other inputs',functi
 end)
 print('Native binding transaction contracts passed: '..count)
 
-test('MBM v3 and newer preserve native editor ownership checks',function()for _,version in ipairs({3,4,5,99})do local f=fixture();f.host.version=version;f.service.poll(f.host,{f.record});assert(f.service.bind(f.record,116))end end)
+test('native editor accepts numeric MBM v3 and newer with ownership checks intact',function()
+ for _,version in ipairs({3,4,5,99})do
+  local f=fixture();f.host.version=version;f.service.poll(f.host,{f.record})
+  assert(f.service.bind(f.record,116),'MBM version '..version..' should be accepted')
+ end
+end)

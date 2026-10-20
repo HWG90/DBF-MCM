@@ -12,6 +12,14 @@ local function fixture(bus,options)
     return model,surface,keys,input,tick,press,pointer
 end
 
+test('hidden console does not repeatedly scan the keyboard',function()
+ local model=Console.new();local surface=Console.surface(model,{explicit_open=true,toggle_key=false})
+ local reads=0;local input={down=function()reads=reads+1;return false end,mouse=function()end}
+ surface.filter(input,true,0);reads=0
+ for _=1,1000 do surface.filter(input,true,0)end
+ assert(reads<=1000,'Hidden console scanned non-mouse keys while idle')
+end)
+
 test('Tab and Enter complete visible suggestions without executing commands',function()
     local calls,gets=0,0;local bus={suggest=function(text)return {{text='mod.enabled = true',label='Enable mod'},{text='mod.enabled = false',label='Disable mod'}}end,
         execute=function(command)calls=calls+1;assert(command=='mod.enabled = false');return true,'Saved'end,

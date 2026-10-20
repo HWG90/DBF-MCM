@@ -78,6 +78,11 @@ bad_vertical=true;assert(view.text_metrics(20,'recover').height==20,'Bad vertica
 assert(view.text_metrics(20,'recover').height==18,'Bad vertical metric poisoned cache')
 assert(view.measure('\195\169',20)==12,'UTF8 native extent incorrect')
 frame=2;assert(not view.refresh_font(),'Same descriptor invalidated GUI');texts={};view.draw(commands);assert(#texts==0,'Unchanged font recreated primitives')
+local retained_id=next_id
+for _=1,1000 do view.draw(commands)end
+assert(next_id==retained_id,'Idle drawing allocated retained primitives')
+commands[1].c[1]=254;texts={};view.draw(commands);assert(#texts==2,'In-place color change was not invalidated')
+commands[1].c[1]=255;view.draw(commands)
 commands[1].text_bold=false;view.draw(commands);assert(destroyed[bold_id],'Retained bold twin leaked after regular text');commands[1].text_bold=true
 descriptor=nil;local before=resolutions;view.draw(commands)
 assert(resolutions==before and view.measure('AV',20)==19,'Draw refreshed descriptor within composed frame')

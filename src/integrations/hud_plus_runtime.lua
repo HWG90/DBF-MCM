@@ -251,6 +251,10 @@ function R.new(folder,log,options)
   published,worker,driver,hook=nil,nil,nil,nil
  end
  function self.poll()
+  if options.modern then
+   local modern=options.modern.poll()
+   if modern then if published then retire()end;return modern end
+  end
   local existing=external_bridge()
   if existing~=nil then return existing end
   if not metadata then return nil,metadata_error end
@@ -273,10 +277,12 @@ function R.new(folder,log,options)
   return published
  end
  function self.release()
+  if options.modern then options.modern.release()end
   retire();last_update=nil;last_error=nil;watches={}
   inspected_update,inspected_worker,inspected_driver,inspected_hook,inspected_watches=nil,nil,nil,nil,nil
  end
  function self.diagnostic()
+  if options.modern and options.modern.diagnostic().active then return 'HUD+ 0.2.8 live owner active (automatic)'end
   if external_bridge()~=nil then return 'HUD+ owner-provided bridge available'end
   return published and 'HUD+ live owner bridge active' or (last_error or metadata_error or 'HUD+ live owner bridge waiting')
  end

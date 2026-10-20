@@ -33,7 +33,7 @@ local function close()
     api,menu,input=nil,nil,nil;binding_host=nil;held_toggle=false
 end
 return {
-    name='Mod Configuration Menu (Preview)',version='0.1.68',author='Goose',
+    name='Mod Configuration Menu (Preview)',version='0.1.71',author='Goose',
     description='Shared mod settings. DEL opens MCM; a guarded MCM tab also opens it from the Escape menu.',
     on_enable=function(ctx)
         assert(ctx.api==2 and type(ctx.global)=='function' and type(ctx.on_cleanup)=='function','MDL API 2 required')
@@ -239,7 +239,7 @@ return {
         if reason then ctx.log('MCM preferences: '..tostring(reason));menu.notice=tostring(reason)end
         if not ok then api.menu_toggle_key=46 end
         ctx.log('MCM preview enabled; menu shortcut '..MCM.menu.key_name(api.menu_toggle_key or 46)..'.')
-        hud_runtime=MCM.hud_plus_runtime.new(ctx.dir,ctx.log)
+        hud_runtime=MCM.hud_plus_runtime.new(ctx.dir,ctx.log,{modern=MCM.hud_plus_028.new(MCM.hud_plus_028_schema,nil,{{schema=MCM.hud_plus_029_schema,version='0.2.9',sha256='f6f43e580d3d5ea64c601d921e5e12352accedd332a3a6dd07f5ec0312f56212'},{schema=MCM.hud_plus_028_schema,version='0.2.8',sha256='389a321ca5ed2f287b9dd7eecddbbccd6f8483ebe266f0c076ba3f0c44488eee'}})})
         hud_integration=MCM.hud_plus.new(api,ctx.log);hud_timer=0
         local recovered=hud_runtime.poll()
         if not recovered then

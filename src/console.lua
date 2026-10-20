@@ -127,7 +127,7 @@ function M.surface(model,options)
     options=options or {};local palette={};for key,value in pairs(neutral)do palette[key]=options.palette and options.palette[key]or value end
     local toggle_key=options.toggle_key;if toggle_key==nil then toggle_key=192 end
     assert(toggle_key==false or type(toggle_key)=='number'and toggle_key%1==0 and toggle_key>=8 and toggle_key<=255,'Invalid console toggle key')
-    local self={};local token={};local hits={};local bounds,parent,screen;local held={};local mouse_held=false
+    local self={};local token={};local hits={};local bounds,parent,screen;local held={};local mouse_held=false;local editing_last=false
     local cache={};local lines={};local cached_revision=-1;local cached_width=-1;local visible=1;local repeats={};local focus_requested=false
     local state=model.window;local explicitly_open=false
     -- Hosts share diagnostics/history; MCM chooses when its own surface opens.
@@ -255,6 +255,9 @@ function M.surface(model,options)
                 state.x,state.y=l,b;state.width,state.height=(right-l)/s,(t-b)/s;state.dock='free'
             end
         end
+        local editing=shown()and state.input_focused
+        if editing and not editing_last then state.suppress_input=true end
+        editing_last=editing
         local blocked={};if shown()and toggle_key then blocked[toggle_key]=true end
         if shown()and state.input_focused then
             refresh_suggestions();local shift,ctrl=input.down(16),input.down(17)
@@ -300,7 +303,7 @@ function M.surface(model,options)
                 if pressed and not held[key]then if key==36 then scroll(0,math.max(0,#lines-visible))elseif key==35 then scroll(0,0)else scroll(changes[key])end end
                 held[key]=pressed
             end
-        else repeats={};for key=8,255 do held[key]=input.down(key)end end
+        else repeats={} end
         if shown()and over and input.wheel then scroll(input.wheel()/120*3)end
         mouse_held=down
         local result={}

@@ -147,6 +147,29 @@ function M.new(sr,preview_only,diagnostic_log,shared_fonts)
         if gui then font_state.guis[gui]=nil end
         preview_guis={};ids={};gui,world=nil,nil;metric_ready=false;reset_metrics()
     end
+    -- Compare retained state directly. Stringifying every coordinate and color
+    -- for every primitive creates garbage even when the menu is unchanged.
+    local visual_fields={'type','text','x','y','w','h','size','a','layer','font_resource','font_material','preview_material','preview_role','text_bold'}
+    local nested_fields={'preview_uv','points'}
+    local function same_command(old,c)
+        if not old or not old.command then return false end
+        local saved=old.command
+        for _,key in ipairs(visual_fields)do if saved[key]~=c[key]then return false end end
+        if c.type=='text' and saved.font_key~=self.font_key then return false end
+        for i=1,3 do if saved.c[i]~=c.c[i]then return false end end
+        for _,key in ipairs(nested_fields)do
+            local a,b=saved[key],c[key]
+            if (a==nil)~=(b==nil)then return false end
+            if a then if #a~=#b then return false end;for i=1,#a do if a[i]~=b[i]then return false end end end
+        end
+        return true
+    end
+    local function snapshot(c)
+        local saved={font_key=self.font_key,c={c.c[1],c.c[2],c.c[3]}}
+        for _,key in ipairs(visual_fields)do saved[key]=c[key]end
+        for _,key in ipairs(nested_fields)do if c[key]then local values={};for i,v in ipairs(c[key])do values[i]=v end;saved[key]=values end end
+        return saved
+    end
     function self.draw(commands)
         if not drawable()then return false end
         if preview_view then
@@ -184,22 +207,15 @@ function M.new(sr,preview_only,diagnostic_log,shared_fonts)
         end end end
         local old_ids=ids;ids={};local report={};local seen={};local uniforms={}
         local report_now=diagnostic_log and not reported
-        local signatures={}
-        for index,c in ipairs(commands)do
-            -- Sidebar command counts must not change unrelated content depth.
-            local z=(c.layer or 100)+(c.type=='text' and 1 or 0)
-            signatures[index]=table.concat({c.type,c.text or '',c.x or 0,c.y or 0,c.w or 0,c.h or 0,c.size or 0,c.a,c.c[1],c.c[2],c.c[3],z,c.font_resource or '',c.font_material or '',c.type=='text' and self.font_key or '',c.preview_material or '',c.preview_uv and table.concat(c.preview_uv,',') or '',c.preview_role or '',tostring(c.text_bold),c.type=='triangle' and triangle_points(c) and table.concat(c.points,',') or ''},'|')
-        end
         -- Destroy all stale IDs before allocations: engines may reuse IDs immediately.
         for index,old in ipairs(old_ids)do
-            if old.signature~=signatures[index] then
+            if not commands[index] or not same_command(old,commands[index]) then
                 destroy_item(old);old_ids[index]=false
             end
         end
         for index,c in ipairs(commands)do
             -- Sidebar command counts must not change unrelated content depth.
             local z=(c.layer or 100)+(c.type=='text' and 1 or 0)
-            local signature=signatures[index]
             local target_gui=command_gui(c)
             local old=old_ids[index]
             -- Refresh uniforms for retained preview triangles on every draw.
@@ -219,7 +235,7 @@ function M.new(sr,preview_only,diagnostic_log,shared_fonts)
                 end
             end
             if report_now and c.type=='text' and not c.diagnostic_console then report[#report+1]=string.format('%d z=%.2f label=%q',index,z,c.text or '')end
-            if old and old.signature==signature then
+            if old then
                 ids[#ids+1]=old
             else
             local color=sr.Color(math.floor(c.a*255+.5),c.c[1],c.c[2],c.c[3]);local value;local primitive_type=c.type;local extra_id,bold_id
@@ -250,7 +266,7 @@ function M.new(sr,preview_only,diagnostic_log,shared_fonts)
                 end
             end
             if report_now and c.type=='text' and not c.diagnostic_console then report[#report]=report[#report]..' allocation='..tostring(value)end
-            if value then ids[#ids+1]={type=primitive_type,id=value,extra_id=extra_id,bold_id=bold_id,signature=signature,gui=target_gui}else ids[#ids+1]={type=c.type,id=nil,signature=nil}end
+            if value then ids[#ids+1]={type=primitive_type,id=value,extra_id=extra_id,bold_id=bold_id,command=snapshot(c),gui=target_gui}else ids[#ids+1]={type=c.type,id=nil,signature=nil}end
             end
         end
         if report_now then

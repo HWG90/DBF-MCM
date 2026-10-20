@@ -40,7 +40,7 @@ local function normalize(c,v)
 end
 local function stored(c)return c.type=='input' or c.type=='toggle' or c.type=='slider' or c.type=='choice' or c.type=='keybind' or c.type=='color'end
 function M.new(store,log,grouping,options)
-    local api={api=1,version='0.1.66',color_hex=M.color_hex,color_rgb=M.color_rgb,hsv_rgb=M.hsv_rgb,rgb_hsv=M.rgb_hsv,mods={},revision=0};log=log or function()end
+    local api={api=1,version='0.1.71',color_hex=M.color_hex,color_rgb=M.color_rgb,hsv_rgb=M.hsv_rgb,rgb_hsv=M.rgb_hsv,mods={},revision=0};log=log or function()end
     options=options or {};local verbose_override
     local function safe_id(value)return type(value)=='string'and #value<=80 and value:match('^[%w_-]+$')~=nil end
     local function owned_log(owner,message,level)
@@ -257,15 +257,41 @@ function M.new(store,log,grouping,options)
         end
         return result
     end
+    -- Explicit handoff: validate the replacement before retiring the prior owner.
+    function api.takeover(spec,ownership)
+        assert(type(ownership)=='table'and type(ownership.source)=='string'and type(ownership.priority)=='number','Expected menu ownership')
+        local prior=api.mods[spec.id]
+        if prior and prior.registration and prior.registration.priority>=ownership.priority then return nil,'A menu with equal or higher priority is active' end
+        local revision=api.revision
+        api.mods[spec.id]=nil
+        local ok,replacement=pcall(register,spec)
+        local candidate=api.mods[spec.id]
+        api.mods[spec.id]=prior;api.revision=revision
+        if not ok then return nil,replacement end
+        if prior then
+            local release=prior.registration and prior.registration.release or ownership.release_legacy
+            if type(release)~='function'then return nil,'Existing menu has no retirement contract' end
+            local called,released,why=pcall(release,prior)
+            if not called or released~=true then return nil,called and why or released end
+        end
+        candidate.registration=ownership
+        api.mods[spec.id]=candidate;api.revision=revision+1
+        return replacement
+    end
     function api.mount(mod_id,parent_name)
         local mod=api.mods[mod_id];if not mod then return false end;plain(parent_name)
         if mod.parent_name~=parent_name then mod.parent_name=parent_name;api.revision=api.revision+1 end
         return true
     end
+    local list_revision,list_cache
     function api.list()
+        if list_revision==api.revision then
+            local result={};for i,mod in ipairs(list_cache)do result[i]=mod end;return result
+        end
         local list={};for _,mod in pairs(api.mods)do if not mod.hidden then list[#list+1]=mod end end
         table.sort(list,function(a,b)if a.name==b.name then return a.id<b.id end;return a.name<b.name end)
-        return grouping and grouping.list(list) or list
+        list_cache=grouping and grouping.list(list) or list;list_revision=api.revision
+        local result={};for i,mod in ipairs(list_cache)do result[i]=mod end;return result
     end
     function api.get(mod,key)local m=assert(api.mods[mod],'Unknown mod');return m.handle.get(key)end
     function api.set(mod,key,value)local m=assert(api.mods[mod],'Unknown mod');return m.handle.set(key,value)end

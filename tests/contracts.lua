@@ -13,6 +13,17 @@ test('all 100 registered mods remain accessible in a sorted list',function()
  local api=core.new();for i=100,1,-1 do api.register(spec(string.format('mod_%03d',i)))end
  local list=api.list();assert(#list==100 and list[1].id=='mod_001' and list[100].id=='mod_100')
 end)
+test('catalog grouping stays idle until an explicit revision and list arrays are isolated',function()
+ local calls=0
+ local api=core.new(nil,nil,{list=function(list)calls=calls+1;return list end})
+ local h=api.register(spec('cached'))
+ for _=1,10000 do local list=api.list();assert(#list==1);list[1]=nil end
+ assert(calls==1,'Unchanged catalogue regrouped')
+ h.set('toggle',false);assert(#api.list()==1 and calls==2,'Committed setting did not invalidate catalogue')
+ api.mount('cached','Parent');api.list();assert(calls==3,'Mount did not invalidate catalogue')
+ h.unregister();assert(#api.list()==0 and calls==4,'Unregister retained stale catalogue')
+end)
+
 test('invalid registration does not partly publish',function()
  local api=core.new();local s=spec();s.pages[1].controls[2].step=0
  assert(not pcall(api.register,s));assert(#api.list()==0)

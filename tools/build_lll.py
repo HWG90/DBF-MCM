@@ -29,7 +29,7 @@ for name in ['core','store','console','commands','preferences','platform','view'
     path='src/'+name+'.lua';modules[path]=(ROOT/path).read_bytes();main.append('MCM.'+name+'=mod.require("'+path+'")')
 for name in ['theme','text','font','layout','branding','input','render']:
     path='src/ui/'+name+'.lua';modules[path]=(ROOT/path).read_bytes();main.append('MCM.ui_'+name+'=mod.require("'+path+'")')
-for name,path in [('native_memory','native_ui/bingus_memory'),('native_runtime','native_ui/bingus_runtime'),('native_entry','integrations/native_entry'),('hud_plus','integrations/hud_plus'),('hud_plus_runtime','integrations/hud_plus_runtime')]:
+for name,path in [('native_memory','native_ui/bingus_memory'),('native_runtime','native_ui/bingus_runtime'),('native_entry','integrations/native_entry'),('hud_plus','integrations/hud_plus'),('hud_plus_runtime','integrations/hud_plus_runtime'),('hud_plus_028','integrations/hud_plus_028'),('hud_plus_028_schema','integrations/hud_plus_028_schema'),('hud_plus_029_schema','integrations/hud_plus_029_schema')]:
     path='src/'+path+'.lua';modules[path]=(ROOT/path).read_bytes();main.append('MCM.'+name+'=mod.require("'+path+'")')
 modules['src/menu.lua']=(ROOT/'src/menu.lua').read_bytes()
 main.append('MCM.menu=mod.require("src/menu.lua",{theme=MCM.ui_theme,text=MCM.ui_text,layout=MCM.ui_layout,branding=MCM.ui_branding,input=MCM.ui_input,render=MCM.ui_render})')

@@ -28,7 +28,17 @@ local function backend(host)
         or (type(words)~='cdata'and type(words)~='table')
         or not integer(host.capacity,512)or #state.order>host.capacity then return nil,'unsupported registry' end
     local reader={state=state}
+    function reader.order()
+        local result={};for _,record in ipairs(state.order)do result[#result+1]=record end
+        for _,record in ipairs(state.extended_order or {})do result[#result+1]=record end
+        return result
+    end
     function reader.snapshot(record)
+        if record.extended then
+            local bindings=host.binding(record.id);if not bindings then return nil,'Extended binding unavailable' end
+            local mappings={};for _,value in ipairs(bindings)do mappings[#mappings+1]={display=(value.device or '')..' '..tostring(value.button or '')..' ('..tostring(value.trigger or 'press')..')'}end
+            return mappings
+        end
         if not state.build_rows then return nil,'Native bindings not ready' end
         if state.registry[record.id]~=record then return nil,'Binding registration changed' end
         local bucket,count=header(record);count=tonumber(count)
@@ -82,11 +92,12 @@ local function readout(mappings,key_name)
     local lines,seen={},{}
     for _,mapping in ipairs(mappings)do
         local name=mapping.device==3 and 'Unknown keyboard key'or 'Other input binding'
+        if mapping.display then name=mapping.display end
         if mapping.device==3 and type(key_name)=='function'then
             local ok,value=pcall(key_name,mapping.key)
             if ok then name=text(value,name)end
         end
-        if mapping.trigger~=0 or mapping.trigger_flags~=0 then name=name..' (Custom trigger)'end
+        if not mapping.display and (mapping.trigger~=0 or mapping.trigger_flags~=0)then name=name..' (Custom trigger)'end
         if not seen[name]then seen[name]=true;lines[#lines+1]=name end
     end
     return table.concat(lines,', ')
@@ -110,10 +121,10 @@ function M.new(api,log,options)
         if not reader then return end
         if options.editor then options.editor.poll(host,reader.state.order)end
         local groups,entries,parts={},{},{}
-        for _,record in ipairs(reader.state.order)do
+        for _,record in ipairs(reader.order())do
             if type(record)~='table'or type(record.id)~='string'or reader.state.registry[record.id]~=record
-                or not integer(record.code,4294967295)or not integer(record.group,65535)
-                or not integer(record.action,65535)or record.code~=record.group*65536+record.action then
+                or not record.extended and (not integer(record.code,4294967295)or not integer(record.group,65535)
+                or not integer(record.action,65535)or record.code~=record.group*65536+record.action)then
                 clear();status='host=true unsupported registration';return
             end
             local category=text(record.category,'Other mods'):upper()
@@ -151,7 +162,7 @@ function M.new(api,log,options)
                 for _,row in ipairs(group_rows)do
                     for _,control in ipairs(mod.pages[1].controls)do if control.id==row.id then row.control=control;break end end
                     row.category=category;rows[#rows+1]=row
-                    if options.editor then
+                    if options.editor and not row.record.extended then
                         local record,control=row.record,row.control
                         control.native_binding_available=function()
                             if host~=owner or reader.state.registry[record.id]~=record then return false,'Binding provider changed'end
@@ -162,7 +173,7 @@ function M.new(api,log,options)
                             local ok,why=options.editor.bind(record,vk)
                             if ok then
                                 local called,mappings=pcall(reader.snapshot,record)
-                                if called and mappings then control.native_binding_value=readout(mappings,options.key_name or M.key_name);control.native_binding_snapshot=mappings end
+                                if called and mappings then control.native_binding_value=readout(mappings,options.key_name or M.key_name);control.native_binding_snapshot=mappings;api.revision=api.revision+1 end
                             end
                             return ok,why
                         end
@@ -177,11 +188,13 @@ function M.new(api,log,options)
         end
         if not visible_category then return end
         for _,row in ipairs(rows)do if visible_category==true or row.category==visible_category:upper()then
+            local previous_value,previous_description=row.control.native_binding_value,row.control.description
             local ok,mappings,why=pcall(reader.snapshot,row.record)
             row.control.native_binding_value=ok and mappings and readout(mappings,options.key_name or M.key_name)or 'Unavailable'
             row.control.native_binding_snapshot=ok and mappings or nil
             row.control.description=row.description or native_description
             if not(ok and mappings)then row.control.description=row.control.description..'\n\n'..(ok and why or 'Native binding unavailable')end
+            if previous_value~=row.control.native_binding_value or previous_description~=row.control.description then api.revision=api.revision+1 end
         end end
     end
     return self

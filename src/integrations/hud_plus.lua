@@ -37,7 +37,7 @@ function H.new(api,log)
   binding,handle,mod=nil,nil,nil
  end
  local function install(bridge)
-  assert(type(bridge)=='table' and bridge.api==1 and bridge.version=='0.2.2','Unsupported HUD+ bridge')
+  assert(type(bridge)=='table' and bridge.api==1 and (bridge.version=='0.2.2'or bridge.version=='0.2.8' or bridge.version=='0.2.9'),'Unsupported HUD+ bridge')
   assert(type(bridge.alive)=='function' and type(bridge.snapshot)=='function' and type(bridge.apply)=='function' and type(bridge.entries)=='function','Incomplete HUD+ bridge')
   assert(bridge.generation~=nil and bridge.alive()==true,'HUD+ bridge is not ready')
   assert(not api.mods.hud_plus,'HUD+ already has an independently owned MCM registration')
