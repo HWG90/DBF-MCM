@@ -2,7 +2,7 @@
 
 # DBF-MCM
 
-**Divers' Best Friend — Mod Configuration Menu**, preview **0.1.71**, by **Goose**.
+**Divers' Best Friend — Mod Configuration Menu**, preview **0.1.72**, by **Goose**.
 A shared in-game settings menu for Helldivers 2 mods.
 
 [Nexus Mods](https://www.nexusmods.com/helldivers2/mods/17157) | [Ayaka](https://ayakamods.com/mods/dbf-mod-configuration-menu.4846/) | [GitHub downloads](https://github.com/HWG90/DBF-MCM/releases) | [Installation](docs/INSTALL-STANDALONE.md) | [Mod author quick start](docs/AUTHOR-GUIDE.md) | [API](docs/API.md) | [Credits](docs/CREDITS.md)
@@ -42,7 +42,7 @@ Source is split into registration/storage, preferences, controller, input, rende
 
 HUD+ 0.2.8 and 0.2.9 settings are detected automatically—no separate patch or bridge installation. Legacy 0.2.2 tooling remains documented in [integration setup](docs/INTEGRATIONS.md). HUD+ executable code and artwork are not included.
 
-## 0.1.71: lighter on the battlefield
+## 0.1.72: lighter on the battlefield
 
 Retained drawing, cached mod grouping, and quieter console input cut measured open-menu MCM CPU time from 4.8 ms to 2.0 ms per frame in a local live sample. This measures MCM work, not total game FPS. Includes automatic HUD+ 0.2.9 settings support and current MBM compatibility.
 

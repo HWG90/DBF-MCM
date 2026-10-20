@@ -104,32 +104,20 @@ function M.new(api,log,core)
     if #visual>0 then pages[#pages+1]={id='appearance',name='Appearance',controls=dbf_appearance(visual,links)}end
     local handle=temp.register({id=id,name=name,description='Bingus Mod Options Menu compatibility. Confirm applies pending settings.',pages=pages})
     local mod=temp.mods[id];mod.legacy=true;local validate_set=handle.set;local validated_get=handle.get;local confirm=handle.confirm
-    local fixed_delay,random_delay,selection_mode,wedge_layout
-    for key,o in pairs(links)do
-     if o.id=='native_stratagem_radial.input_interval_ms'then fixed_delay=key end
-     if o.id=='native_stratagem_radial.randomize_input_delay'then random_delay=key end
-     if o.id=='native_stratagem_radial.selection_mode_ordered'then selection_mode=key end
-     if o.id=='native_stratagem_radial.experimental_layout'then wedge_layout=key end
+    -- Imported child handles retain their own ownership registry even when
+    -- presentation mounting hides them. Forward its invalidation to the UI.
+    local imported_revision=temp.revision
+    local function invalidate()
+     if imported_revision~=temp.revision then imported_revision=temp.revision;api.revision=api.revision+1 end
     end
-    local function delay_state(value)
-     if fixed_delay and random_delay then
-      local control=mod.controls[fixed_delay];local disabled=value==true
-      if control.disabled~=disabled then control.disabled=disabled end
-     end
+    for _,method in ipairs({'refresh_conditions','edit','discard','set_disabled','available'})do
+     local original=handle[method]
+     handle[method]=function(...)local a,b=original(...);invalidate();return a,b end
     end
-    local function wedge_state(value)
-     if selection_mode and wedge_layout then
-      local control=mod.controls[wedge_layout];local disabled=value~=1
-      if control.disabled~=disabled then control.disabled=disabled end
-     end
-    end
-    if random_delay then delay_state(host.get(links[random_delay].id))end
-    if selection_mode then wedge_state(host.get(links[selection_mode].id))end
+    local native_keys={};for key,o in pairs(links)do native_keys[o.id]=key end
     function handle.get(key)
      local o=links[key];if not o then return end
      local value=pending[key];if value==nil then value=host.get(o.id)end
-     if key==random_delay then delay_state(value)end
-     if key==selection_mode then wedge_state(value)end
      return value
     end
     function handle.set(key,value)
@@ -141,16 +129,33 @@ function M.new(api,log,core)
      for _,callback in ipairs(registry.callbacks[o.id] or {})do
       local called,why=pcall(callback,value,o.id);if not called then log('Legacy callback failed: '..tostring(why))end
      end
-     if key==random_delay then delay_state(value)end
-     if key==selection_mode then wedge_state(value)end
+     handle.refresh_conditions()
      return true
+    end
+    -- Legacy providers use their native option IDs in predicates. Read MCM
+    -- drafts first so dependencies change before Confirm, not one frame later.
+    for key,o in pairs(links)do
+     local rules={};local has=false
+     for _,name in ipairs({'enabled_if','disabled_if','visible_if'})do
+      if type(o[name])=='function'then
+       local predicate=o[name];rules[name]=function(get)
+        return predicate(function(id)local mapped=native_keys[id];if mapped then return get(mapped)end;return host.get(id)end)
+       end;has=true
+      end
+     end
+     if o.id=='native_stratagem_radial.input_interval_ms'and native_keys['native_stratagem_radial.randomize_input_delay']and not has then
+      rules.enabled_if=function(get)return not get(native_keys['native_stratagem_radial.randomize_input_delay'])end;has=true
+     end
+     if has then handle.set_condition(key,rules)end
     end
     mod.on_change=function(value,key) local ok,err=handle.set(key,value);if not ok then error(err) end end
     function handle.confirm(page_id)
      -- Profile owners can replace values through host.set without callbacks.
      -- Compare the draft against those current values, not registration defaults.
      for key,o in pairs(links)do mod.values[key]=host.get(o.id)end
-     return confirm(page_id)
+     local ok,why=confirm(page_id)
+     handle.refresh_conditions()
+     return ok,why
     end
     function handle.reset(key)return handle.set(key,links[key].default)end
     api.mods[id]=mod;imported[#imported+1]=id

@@ -40,7 +40,7 @@ local function normalize(c,v)
 end
 local function stored(c)return c.type=='input' or c.type=='toggle' or c.type=='slider' or c.type=='choice' or c.type=='keybind' or c.type=='color'end
 function M.new(store,log,grouping,options)
-    local api={api=1,version='0.1.71',color_hex=M.color_hex,color_rgb=M.color_rgb,hsv_rgb=M.hsv_rgb,rgb_hsv=M.rgb_hsv,mods={},revision=0};log=log or function()end
+    local api={api=1,version='0.1.72',color_hex=M.color_hex,color_rgb=M.color_rgb,hsv_rgb=M.hsv_rgb,rgb_hsv=M.rgb_hsv,mods={},revision=0};log=log or function()end
     options=options or {};local verbose_override
     local function safe_id(value)return type(value)=='string'and #value<=80 and value:match('^[%w_-]+$')~=nil end
     local function owned_log(owner,message,level)
@@ -118,6 +118,8 @@ function M.new(store,log,grouping,options)
             flatten(definition.controls or {},{},0)
             for _,definition_control in ipairs(flattened)do
                 local c=copy(definition_control);c.page=page;if c.type=='text' then c.label=rich(c.label or '')else plain(c.label or '')end;c.description=rich(c.description or '')
+                for _,name in ipairs({'enabled_if','disabled_if','visible_if'})do assert(c[name]==nil or type(c[name])=='function','Condition must be a function: '..name)end
+                c.base_disabled=c.disabled==true
                 assert(c.text_role==nil or c.text_role=='body' or c.text_role=='title' or c.text_role=='selection','Invalid text role')
                 assert(({input=true,color=true,toggle=true,slider=true,choice=true,keybind=true,button=true,text=true,section=true})[c.type],'Unsupported control')
                 assert(c.column==nil or c.column==1 or c.column==2,'Column must be 1 or 2')
@@ -144,7 +146,56 @@ function M.new(store,log,grouping,options)
             mod.pages[#mod.pages+1]=page
         end
         api.mods[mod.id]=mod;api.revision=api.revision+1
-        local handle={id=mod.id}
+        local handle={id=mod.id};local evaluating=false
+        local conditional={}
+        for _,page in ipairs(mod.pages)do for _,c in ipairs(page.controls)do
+            if c.enabled_if or c.disabled_if or c.visible_if then conditional[#conditional+1]=c end
+        end end
+        function handle.refresh_conditions()
+            if evaluating then return false end
+            evaluating=true;local changed=false
+            local function get(key)
+                local c=assert(mod.controls[key],'Unknown conditional dependency: '..tostring(key))
+                local value=c.page.pending[key];if value~=nil then return value end
+                return handle.get(key)
+            end
+            for _,c in ipairs(conditional)do
+                local function evaluate(name,default)
+                    if not c[name]then return default end
+                    local ok,value=pcall(c[name],get)
+                    if not ok or type(value)~='boolean'then
+                        local why=ok and 'Condition must return boolean' or tostring(value)
+                        if c.condition_error~=why then owned_log(mod.id,'Condition failed for '..tostring(c.id)..': '..why,'error');c.condition_error=why end
+                        return name=='disabled_if'
+                    end
+                    return value
+                end
+                local disabled=c.base_disabled or not evaluate('enabled_if',true) or evaluate('disabled_if',false)
+                local hidden=not evaluate('visible_if',true)
+                if (c.disabled==true)~=disabled or (c.condition_hidden==true)~=hidden then
+                    c.disabled=disabled;c.condition_hidden=hidden;changed=true
+                    -- A newly unavailable draft cannot be submitted later.
+                    if c.id and (disabled or hidden)then c.page.pending[c.id]=nil;c.page.actions[c.id]=nil end
+                end
+            end
+            evaluating=false
+            if changed then api.revision=api.revision+1 end
+            return changed
+        end
+        function handle.set_condition(key,rules)
+            assert(api.mods[mod.id]==mod,'Retired registration')
+            local c=assert(mod.controls[key],'Unknown control');assert(type(rules)=='table','Expected condition table')
+            for _,name in ipairs({'enabled_if','disabled_if','visible_if'})do assert(rules[name]==nil or type(rules[name])=='function','Condition must be a function: '..name)end
+            local present=false;for _,item in ipairs(conditional)do if item==c then present=true end end
+            if not present then conditional[#conditional+1]=c end
+            for _,name in ipairs({'enabled_if','disabled_if','visible_if'})do c[name]=rules[name]end
+            handle.refresh_conditions();api.revision=api.revision+1;return true
+        end
+        function handle.available(key)
+            handle.refresh_conditions()
+            local c=mod.controls[key]
+            return api.mods[mod.id]==mod and c~=nil and not c.disabled and not c.condition_hidden
+        end
         local function validate(c,value)
             if not c.validate then return end
             local ok,result=pcall(c.validate,value)
@@ -155,7 +206,7 @@ function M.new(store,log,grouping,options)
         function handle.set(key,value)
             assert(api.mods[mod.id]==mod,'Retired registration')
             local c=assert(mod.controls[key],'Unknown control');assert(stored(c),'Control is not a setting')
-            assert(not c.disabled,'Control disabled');value=normalize(c,value)
+            if not handle.available(key)then return false,'Setting unavailable' end;value=normalize(c,value)
             validate(c,value)
             if value==mod.values[key]then return true end
             local next_values=copy(mod.values);next_values[key]=value
@@ -164,7 +215,15 @@ function M.new(store,log,grouping,options)
             for _,callback in ipairs({c.on_change or false,mod.on_change or false})do
                 if callback then local ok,err=pcall(callback,value,key,old);if not ok then owned_log(mod.id,'Callback failed for '..mod.id..'.'..key..': '..tostring(err),'error')end end
             end
-            api.revision=api.revision+1;log('Setting committed: '..mod.id..'.'..key);return true
+            handle.refresh_conditions();api.revision=api.revision+1;log('Setting committed: '..mod.id..'.'..key);return true
+        end
+        -- Contextual availability changes do not rebuild registrations.
+        function handle.set_disabled(key,disabled)
+            assert(api.mods[mod.id]==mod,'Retired registration')
+            assert(type(disabled)=='boolean','Disabled state must be boolean')
+            local c=assert(mod.controls[key],'Unknown control')
+            if c.base_disabled==disabled then return false end
+            c.base_disabled=disabled;c.disabled=disabled;if disabled then c.page.pending[key]=nil;c.page.actions[key]=nil end;handle.refresh_conditions();api.revision=api.revision+1;return true
         end
         function handle.preview(key)
             local c=assert(mod.controls[key],'Unknown control');local pending=c.page.pending
@@ -174,10 +233,10 @@ function M.new(store,log,grouping,options)
             assert(api.mods[mod.id]==mod,'Retired registration')
             local c=assert(mod.controls[key],'Unknown control')
             if c.require_confirmation==false or not c.page.require_confirmation then return handle.set(key,value)end
-            assert(stored(c) and not c.disabled,'Setting unavailable');value=normalize(c,value)
+            if not stored(c)or not handle.available(key)then return false,'Setting unavailable'end;value=normalize(c,value)
             validate(c,value)
             if value==handle.get(key)then c.page.pending[key]=nil else c.page.pending[key]=value end
-            return true
+            handle.refresh_conditions();api.revision=api.revision+1;return true
         end
         local function page_by_id(page_id)
             assert(api.mods[mod.id]==mod,'Retired registration')
@@ -185,13 +244,13 @@ function M.new(store,log,grouping,options)
         end
         function handle.queue(key)
             assert(api.mods[mod.id]==mod,'Retired registration')
-            local c=assert(mod.controls[key],'Unknown control');assert(c.type=='button' and not c.disabled,'Button unavailable')
+            local c=assert(mod.controls[key],'Unknown control');if c.type~='button'or not handle.available(key)then return false,'Button unavailable'end
             if c.require_confirmation~=true then return handle.activate(key)end
             c.page.actions[key]=true;return true
         end
-        function handle.discard(page_id)local p=page_by_id(page_id);p.pending={};p.actions={};return true end
+        function handle.discard(page_id)local p=page_by_id(page_id);p.pending={};p.actions={};handle.refresh_conditions();api.revision=api.revision+1;return true end
         function handle.confirm(page_id)
-            local p=page_by_id(page_id);local next_values=copy(mod.values);local changes={}
+            handle.refresh_conditions();local p=page_by_id(page_id);local next_values=copy(mod.values);local changes={}
             for _,c in ipairs(p.controls)do local v=p.pending[c.id]
                 if v~=nil then assert(not c.disabled,'Setting disabled');v=normalize(c,v)
                     validate(c,v)
@@ -206,7 +265,7 @@ function M.new(store,log,grouping,options)
                     if callback then local ok,err=pcall(callback,change.v,change.c.id,change.old);if not ok then owned_log(mod.id,'Callback failed for '..mod.id..'.'..change.c.id..': '..tostring(err),'error')end end
                 end
             end
-            local actions=p.actions;p.actions={};api.revision=api.revision+1
+            handle.refresh_conditions();local actions=p.actions;p.actions={};api.revision=api.revision+1
             if #changes>0 then log('Page committed: '..mod.id..'/'..p.id..' ('..#changes..' settings)')end
             local messages={}
             for _,c in ipairs(p.controls)do if actions[c.id]then local ok,result=handle.activate(c.id);if not ok then return false,result end;if type(result)=='string' and #result>0 then messages[#messages+1]=result end end end
@@ -231,18 +290,18 @@ function M.new(store,log,grouping,options)
                     if callback then local ok,err=pcall(callback,change.v,change.key,change.old);if not ok then owned_log(mod.id,'Callback failed for '..mod.id..'.'..change.key..': '..tostring(err),'error')end end
                 end
             end
-            api.revision=api.revision+1;log('Settings batch committed: '..mod.id..' ('..#changes..' settings)');return true
+            handle.refresh_conditions();api.revision=api.revision+1;log('Settings batch committed: '..mod.id..' ('..#changes..' settings)');return true
         end
         function handle.reset(key)return handle.set(key,assert(mod.controls[key],'Unknown control').default)end
         function handle.activate(key)
             assert(api.mods[mod.id]==mod,'Retired registration')
-            local c=assert(mod.controls[key],'Unknown control');assert(c.type=='button' and not c.disabled,'Button unavailable')
+            local c=assert(mod.controls[key],'Unknown control');if c.type~='button'or not handle.available(key)then return false,'Button unavailable'end
             local ok,result=pcall(c.on_activate)
             if ok then log('Action completed: '..mod.id..'.'..key)else owned_log(mod.id,'Action failed: '..mod.id..'.'..key..': '..tostring(result),'error')end
             return ok,result
         end
         function handle.unregister()if api.mods[mod.id]==mod then api.mods[mod.id]=nil;api.revision=api.revision+1 end end
-        mod.handle=handle;return handle
+        mod.handle=handle;handle.refresh_conditions();return handle
     end
     function api.register(spec)
         local ok,result=pcall(register,spec)

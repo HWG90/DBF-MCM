@@ -1,6 +1,6 @@
 -- Bind declarative data to explicitly supplied Lua behavior. No globals/eval.
 local M={}
-local callbacks={on_change=true,on_activate=true,validate=true,render_preview=true}
+local callbacks={on_change=true,on_activate=true,validate=true,enabled_if=true,disabled_if=true,visible_if=true,render_preview=true}
 function M.bind(definition,handlers)
     handlers=handlers or {}
     local function copy(value)

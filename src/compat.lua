@@ -45,6 +45,9 @@ function M.new(store,shared)
     function api.register_option(id,spec)
         if type(id)~='string' or #id==0 or #id>96 or id:find('[%c]')or type(spec)~='table' then return false,'invalid option registration' end
         local o={id=id,kind=spec.type,label=text(spec.label,64),description=spec.description and text(spec.description,400) or '',gap=spec.gap==true}
+        for _,name in ipairs({'enabled_if','disabled_if','visible_if'})do
+            if spec[name]~=nil and type(spec[name])~='function'then return false,'invalid condition' end;o[name]=spec[name]
+        end
         if not o.label or not o.description then return false,'invalid option text' end
         if o.kind=='toggle' then o.default=spec.default;if o.default==nil then o.default=false end
         elseif o.kind=='choice' then

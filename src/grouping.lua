@@ -35,11 +35,12 @@ function M.list(list)
    add(mod,'')
    for _,child in ipairs(children[mod]or {})do add(child,child.id..'__')end
    local h={id=mod.id}
-   for _,method in ipairs({'get','preview','set','edit','reset','activate','queue'})do
+   for _,method in ipairs({'get','preview','set','edit','reset','activate','queue','available'})do
     local name=method;h[name]=function(key,...)
      local route=assert(routes[key],'Unknown mounted setting')
      local control=composite.controls[key]
-     if control.source_mod_id and (name=='set'or name=='edit'or name=='reset'or name=='activate'or name=='queue')then assert(not control.disabled,'Setting unavailable')end
+     if name=='available'then return type(route.handle.available)=='function'and route.handle.available(route.id)or not control.disabled and not control.condition_hidden end
+     if control.source_mod_id and (name=='set'or name=='edit'or name=='reset'or name=='activate'or name=='queue')then if control.disabled or control.condition_hidden then return false,'Setting unavailable'end end
      local fn=route.handle[name] or route.handle[name=='edit' and 'set' or 'get']
      return fn(route.id,...)
     end

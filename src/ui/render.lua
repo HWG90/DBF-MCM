@@ -306,12 +306,21 @@ function MODULE.install(context)
 
             local rows=selectable(page);self.row=math.max(1,math.min(self.row,#rows));local selected=rows[self.row]
             local resettable=selected and selected.default~=nil and not selected.disabled
-            surface(20,79,self.sidebar_width-40,34,{enabled=resettable})
-            bounded(32,89,'RESET SETTING',16,resettable and white or T.disabled,self.sidebar_width-64,nil,'body',79,34)
-            hit(20,79,self.sidebar_width-40,34,function()
+            local reset_width=(self.sidebar_width-48)/2
+            surface(20,79,reset_width,34,{enabled=resettable})
+            bounded(27,89,'RESET ONE',13,resettable and white or T.disabled,reset_width-14,nil,'body',79,34)
+            hit(20,79,reset_width,34,function()
                 if not resettable then return end
                 local called,ok,reason=pcall(mod.handle.edit or mod.handle.set,selected.id,selected.default)
                 self.notice=called and ok and ('Default restored; '..saved_notice(selected,mod.handle))or tostring(called and reason or ok)
+            end)
+            local page_reset=page.require_confirmation==true
+            surface(28+reset_width,79,reset_width,34,{enabled=page_reset})
+            bounded(35+reset_width,89,'RESET PAGE',13,page_reset and white or T.disabled,reset_width-14,nil,'body',79,34)
+            hit(28+reset_width,79,reset_width,34,function()
+                if not page_reset then return end
+                local called,ok,why=pcall(self.reset_page_defaults)
+                if not called or not ok then self.notice=tostring(called and why or ok)end
             end)
 
             local compact=ww-self.sidebar_width<1135
@@ -372,9 +381,9 @@ function MODULE.install(context)
 
                     local row_hover=not self.dropdown and not self.color_picker and hovering(x-5,y-7,row_width+5,34)
                     text_focus=c==selected and self.focus=='settings'
-                    rect(x-5,y-7,row_width+5,34,c==selected and T.selected or (row_hover and T.hover or ((i%2==0)and T.panel or T.background)))
+                    rect(x-5,y-7,row_width+5,34,c.type=='section' and T.focus or c==selected and T.selected or (row_hover and T.hover or ((i%2==0)and T.panel or T.background)))
                     commands[#commands].layer=95;commands[#commands].ui_role='setting_row';commands[#commands].hovered=row_hover==true;commands[#commands].focused=text_focus
-                    rect(x-5,y-7,2,34,c==selected and (text_focus and T.focus or T.border)or T.background);commands[#commands].layer=99
+                    rect(x-5,y-7,2,34,c.type=='section' and T.focus or c==selected and (text_focus and T.focus or T.border)or T.background);commands[#commands].layer=99
 
                     local color=c.disabled and T.disabled or accent
 
@@ -421,7 +430,7 @@ function MODULE.install(context)
                     elseif entry.body then text(x,y,label,20,c.disabled and muted or white)
                     else
                         local heading=c.type=='section' or c.text_role=='title'
-                        bounded(x,y,label,heading and 17 or 20,c.disabled and T.disabled or white,label_width,nil,heading and 'heading'or 'body',y-7,34)
+                        bounded(x,y,label,heading and 17 or 20,c.type=='section' and {0,0,0} or c.disabled and T.disabled or white,label_width,nil,heading and 'heading'or 'body',y-7,34)
                     end
 
                     if c.collapsible then
@@ -485,7 +494,7 @@ function MODULE.install(context)
 
                             hit(numeric_x,y-5,numeric_width,29,function()
 
-                                if control.disabled then return end;select()
+                                if control.disabled or(owner.handle.available and not owner.handle.available(control.id))then return end;select()
 
                                 self.text_edit={mod=owner,control=control,text=tostring((owner.handle.preview or owner.handle.get)(control.id)),replace=true}
 
@@ -495,7 +504,7 @@ function MODULE.install(context)
                             state.hits[#state.hits].edit_control=control;state.hits[#state.hits].edit_mod=owner
                             hit(track-8,y-7,width+16,34,function(mx)
 
-                                if control.disabled then return end;select()
+                                if control.disabled or(owner.handle.available and not owner.handle.available(control.id))then return end;select()
 
                                 local d={mod=owner,control=control,value=(owner.handle.preview or owner.handle.get)(control.id)}
 
@@ -528,7 +537,7 @@ function MODULE.install(context)
                             surface(vx+350,y-5,175,29,{enabled=not c.disabled,field=true,selected=c==selected and self.focus=='settings'})
                             bounded(vx+360,y,value,18,c.disabled and T.disabled or white,155,nil,nil,y-5,29)
 
-                            hit(vx+295,y-7,230,34,function()if control.disabled then return end;select();self.color_picker={mod=owner,control=control,rgb=api.color_rgb((owner.handle.preview or owner.handle.get)(control.id))}end)
+                            hit(vx+295,y-7,230,34,function()if control.disabled or(owner.handle.available and not owner.handle.available(control.id))then return end;select();self.color_picker={mod=owner,control=control,rgb=api.color_rgb((owner.handle.preview or owner.handle.get)(control.id))}end)
 
                         elseif c.type=='toggle' then
 
@@ -586,7 +595,7 @@ function MODULE.install(context)
 
                                 hit(cx,y-5,cw,29,function()
 
-                                    if control.disabled then return end;select()
+                                    if control.disabled or(owner.handle.available and not owner.handle.available(control.id))then return end;select()
 
                                     self.dropdown={mod=owner,control=control,selected=value,scroll=math.max(0,math.min(math.max(0,#control.choices-8),value-4)),x=cx,top=y-8,width=cw}
 

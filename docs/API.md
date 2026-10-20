@@ -152,3 +152,20 @@ and restored from the original snapshot. Menu capture keeps its existing behavio
 This replaces mode-2 passthrough for photo consumers and requires the new DLL.
 
 Photo pause protection: the native input DLL requires known session state with zero other and synchronizing peers (or zero offline connections) before invoking the engine pause setter. Unknown/error state denies pause. Freecam remains usable in multiplayer without pause. Active pause is rechecked and restored when peers join. Held keyboard and mouse input no longer blocks photo capture; prior gameplay releases are forwarded with gameplay mouse focus disabled. Each activation starts from the current gameplay camera position.
+
+## Conditional controls (0.1.72)
+
+Controls accept `enabled_if`, `disabled_if`, and `visible_if`. Each function receives `get(id)`, which reads the latest draft value, or the saved value if no draft exists. Return a boolean; predicates must only read state.
+
+```lua
+{ id='delay', type='slider', label='Input delay', min=0, max=250, step=5, default=70,
+  enabled_if=function(get) return not get('randomize_delay') end },
+{ id='wheel_size', type='slider', label='Wheel size', min=50, max=150, step=1, default=100,
+  visible_if=function(get) return get('menu_type') == 1 end },
+```
+
+Conditions refresh after edits, commits, discard and dependency changes. Disabled or hidden controls reject stale writes safely; their pending edits/actions are cleared when they become unavailable. Saved values are retained. Predicate failures disable or hide the affected control and log an owner error without closing MCM.
+
+`handle.set_condition(id, {enabled_if=fn, disabled_if=fn, visible_if=fn})` replaces a control's rules; `{}` removes them. `handle.set_disabled(id, boolean)` changes manual availability. Call `handle.refresh_conditions()` when an external state change affects a predicate. `handle.available(id)` rechecks and returns current editability. No idle polling is added.
+
+Legacy `register_option` supports the same three function fields when registered through MCM's compatibility host. Their getter uses original legacy option IDs. Providers using an independent legacy host must preserve that metadata or register through the MCM API. Declarative definitions can name handlers for the three condition fields.

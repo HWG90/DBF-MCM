@@ -88,7 +88,7 @@ function M.new(api,measure)
     local function visible_controls(page)
         local rows,groups={},{}
         for _,c in ipairs(page and page.controls or {})do
-            local visible=true
+            local visible=not c.condition_hidden
             for _,parent in ipairs(c.groups or {})do if groups[parent]==false then visible=false;break end end
             if c.collapsible then groups[c.id]=section_open(page,c)end
             if visible then rows[#rows+1]=c end
@@ -462,6 +462,23 @@ function M.new(api,measure)
     function self.advance(dt)
         state.dt=math.max(0,math.min(1,tonumber(dt)or 0))
         if self.visible then state.elapsed=state.elapsed+state.dt else state.elapsed=0;state.text_age={}end
+    end
+
+    function self.reset_page_defaults()
+        local mod,page=active()
+        if not mod or not page or not page.require_confirmation then return false,'This page does not support staged reset' end
+        local count=0
+        -- Restore toggles first so their dependent sliders can become editable.
+        for pass=1,2 do for _,c in ipairs(page.controls)do
+            if (c.type=='toggle')==(pass==1) and c.id and c.default~=nil and not c.disabled and c.type~='keybind' then
+                local ok,why=(mod.handle.edit or mod.handle.set)(c.id,c.default)
+                if not ok then return false,why end
+                count=count+1
+            end
+        end
+        end
+        self.notice='Defaults ready to apply; Confirm or Discard'
+        return true,count
     end
 
     local context={self=self,api=api,measure=measure,console=console,state=state,M=M,helpers={

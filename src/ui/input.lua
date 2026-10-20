@@ -371,13 +371,14 @@ function MODULE.install(context)
 
             if state.drag then
 
-                if not self.visible then state.drag=nil
+                if not self.visible or (state.drag.mod.handle.available and not state.drag.mod.handle.available(state.drag.control.id))then state.drag=nil
 
                 elseif input.down(1) then if x then state.drag.move(x)end
 
                 else
 
-                    local ok,err=(state.drag.mod.handle.edit or state.drag.mod.handle.set)(state.drag.control.id,state.drag.value)
+                    local called,ok,err=pcall(state.drag.mod.handle.edit or state.drag.mod.handle.set,state.drag.control.id,state.drag.value)
+                    if not called then err=ok;ok=false end
 
                     self.notice=ok and (saved_notice(state.drag.control,state.drag.mod.handle)) or ('Could not save: '..tostring(err));state.drag=nil
 
