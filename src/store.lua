@@ -5,7 +5,7 @@ function M.new(folder)
     local function path(id)assert(id:match('^[%w_-]+$'));return folder..'/'..id..'.ini'end
     function self.load(id)
         local values={};local f=io.open(path(id),'rb');if not f then return values end
-        local data=f:read(65537);f:close();if #data>65536 then return values end
+        local data=f:read(65537) or '';f:close();if #data>65536 then return values end
         for key,value in data:gmatch('([%w_-]+)=([^\r\n]+)')do
             if value:match('^@[%w _-]+$') then values[key]=value:sub(2) elseif value=='true' then values[key]=true elseif value=='false' then values[key]=false
             elseif value:match('^#%x%x%x%x%x%x$') then values[key]=value:upper()
